@@ -123,7 +123,10 @@ function newRepo() {
     ]
   }).then(function (ret) {
     if (!ret.canceled) {
-      console.log(ret.filePaths[0])
+      const currentPaht = ret.filePaths[0]
+      global.sharedObject = {
+        currentPaht: currentPaht
+      }
     }
   })
 }
@@ -135,7 +138,13 @@ function openRepo() {
     ]
   }).then(function (ret) {
     if (!ret.canceled) {
-      console.log(ret.filePaths[0])
+      const currentPaht = ret.filePaths[0]
+      const repoName = currentPaht.substring(currentPaht.lastIndexOf('\\') + 1)
+      win.setTitle('知识管理 [' + repoName + ']')
+      global.sharedObject = {
+        currentPaht: currentPaht
+      }
+      win.webContents.send('open-db', currentPaht)
     }
   })
 }
