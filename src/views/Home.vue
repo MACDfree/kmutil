@@ -3,13 +3,33 @@
     <div class="left">
       分类
       <div class="category">
-        <el-tree :data="directorys"></el-tree>
+        <el-tree
+          :data="directorys"
+          :expand-on-click-node="false"
+          :node-key="'id'"
+          :default-expand-all="true"
+        ></el-tree>
       </div>标签
-      <div class="tag"></div>
+      <div class="tag">
+        <div v-for="tag in tags" :key="tag.id">
+          <el-tag :id="tag.id">{{tag.name}}</el-tag>
+        </div>
+      </div>
     </div>
     <div class="middle">
-      <div class="search">搜索</div>
-      <div class="list">列表</div>
+      <div class="search">
+        <el-input
+          size="mini"
+          placeholder="请输入搜索内容"
+          prefix-icon="el-icon-search"
+          v-model="searchStr"
+        ></el-input>
+      </div>
+      <div class="list">
+        <ul>
+          <li></li>
+        </ul>
+      </div>
     </div>
     <div class="main">主</div>
   </div>
@@ -24,11 +44,27 @@ const ipcRenderer = require('electron').ipcRenderer
 // const currentPath = sharedObject ? sharedObject.currentPath : null
 const sqlite3 = sq3.verbose()
 
+function findChildren(parent, list) {
+  const nodes = []
+  list.forEach(row => {
+    if (row.PARENT === parent) {
+      nodes.push({
+        label: row.NAME,
+        id: row.ID,
+        children: findChildren(row.ID, list)
+      })
+    }
+  })
+  return nodes
+}
+
 export default {
   name: 'Home',
   data() {
     return {
-      directorys: []
+      directorys: [],
+      tags: [],
+      searchStr: ''
     }
   },
   components: {},
@@ -38,72 +74,30 @@ export default {
         var db
         const that = this
         db = new sqlite3.Database(arg + '\\info.db', function() {
-          db.all('select * from km_directory', function(err, rows) {
+          db.all('select * from km_directory order by id desc', function(
+            err,
+            rows
+          ) {
             if (!err) {
-              that.directorys = [
-                {
-                  label: '一级 1',
-                  children: [
-                    {
-                      label: '二级 1-1',
-                      children: [
-                        {
-                          label: '三级 1-1-1'
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  label: '一级 2',
-                  children: [
-                    {
-                      label: '二级 2-1',
-                      children: [
-                        {
-                          label: '三级 2-1-1'
-                        }
-                      ]
-                    },
-                    {
-                      label: '二级 2-2',
-                      children: [
-                        {
-                          label: '三级 2-2-1'
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  label: '一级 3',
-                  children: [
-                    {
-                      label: '二级 3-1',
-                      children: [
-                        {
-                          label: '三级 3-1-1'
-                        }
-                      ]
-                    },
-                    {
-                      label: '二级 3-2',
-                      children: [
-                        {
-                          label: '三级 3-2-1'
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-              rows.forEach(row => {
-                console.log(row)
+              that.directorys.push({
+                label: '全部',
+                children: findChildren(0, rows)
               })
             } else {
               console.log(err)
             }
-            db.close()
+          })
+          db.all('select * from km_tag order by id desc', function(err, rows) {
+            if (!err) {
+              rows.forEach(row => {
+                that.tags.push({
+                  id: row.ID,
+                  name: row.NAME
+                })
+              })
+            } else {
+              console.log(err)
+            }
           })
         })
       }
@@ -115,11 +109,19 @@ export default {
 <style lang="stylus">
 .home
   display flex
+  height 100%
 .left
   width 250px
   .category
     max-height 300px
     overflow auto
+  .tag
+    max-height 300px
+    overflow auto
+    div
+      margin 4px
+    .el-tag
+      cursor pointer
 .middle
   width 300px
 .main
