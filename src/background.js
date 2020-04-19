@@ -5,11 +5,16 @@ import {
   createProtocol
   /* installVueDevtools */
 } from 'vue-cli-plugin-electron-builder/lib'
+
+import Store from 'electron-store'
+
 const isDevelopment = process.env.NODE_ENV !== 'production'
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let win
+
+const store = new Store();
 
 // Scheme must be registered before the app is ready
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { secure: true, standard: true } }])
@@ -73,8 +78,21 @@ app.on('ready', async () => {
     //   console.error('Vue Devtools failed to install:', e.toString())
     // }
   }
+
+  const currentPath = store.get('recentPath')
+  if (currentPath) {
+    global.sharedObject = {
+      currentPath: currentPath
+    }
+  }
+
   createMenu()
   createWindow()
+
+  if (currentPath) {
+    const repoName = currentPath.substring(currentPath.lastIndexOf('\\') + 1)
+    win.setTitle('知识管理 [' + repoName + ']')
+  }
 })
 
 // Exit cleanly on request from parent process in development mode.
@@ -138,13 +156,14 @@ function openRepo() {
     ]
   }).then(function (ret) {
     if (!ret.canceled) {
-      const currentPaht = ret.filePaths[0]
-      const repoName = currentPaht.substring(currentPaht.lastIndexOf('\\') + 1)
+      const currentPath = ret.filePaths[0]
+      store.set("recentPath", currentPath)
+      const repoName = currentPath.substring(currentPath.lastIndexOf('\\') + 1)
       win.setTitle('知识管理 [' + repoName + ']')
       global.sharedObject = {
-        currentPaht: currentPaht
+        currentPath: currentPath
       }
-      win.webContents.send('open-db', currentPaht)
+      win.reload()
     }
   })
 }

@@ -8,7 +8,10 @@
           :expand-on-click-node="false"
           :node-key="'id'"
           :default-expand-all="true"
+          ref="directoryTree"
+          @node-click="treeNodeClick"
           height="100%"
+          :highlight-current="true"
         ></el-tree>
       </div>标签
       <div class="tag">
@@ -25,6 +28,22 @@
           prefix-icon="el-icon-search"
           v-model="searchStr"
         ></el-input>
+        <el-popover placement="top" width="160" v-model="newDocVisible">
+          <p>文档类型</p>
+          <el-select v-model="newDocType" placeholder="请选择" size="mini">
+            <el-option
+              v-for="type in types"
+              :key="type.value"
+              :label="type.label"
+              :value="type.value"
+            ></el-option>
+          </el-select>
+          <div style="text-align: right; margin: 0">
+            <el-button size="mini" type="text" @click="newDocVisible = false">取消</el-button>
+            <el-button type="primary" size="mini" @click="newDoc()">确定</el-button>
+          </div>
+          <el-button slot="reference" size="mini" icon="el-icon-document-add"></el-button>
+        </el-popover>
       </div>
       <div class="list">
         <ul>
@@ -35,15 +54,23 @@
     <div class="main">
       <div>
         <el-input v-model="title" placeholder="请输入标题" size="mini" :disabled="!editable"></el-input>
-        <el-button slot="append" size="mini" @click="saveDoc">{{ editable?'保存修改':'开始编辑' }}</el-button>
+        <el-select v-model="docType" placeholder="请选择" size="mini" :disabled="true">
+          <el-option
+            v-for="type in types"
+            :key="type.value"
+            :label="type.label"
+            :value="type.value"
+          ></el-option>
+        </el-select>
+        <el-button size="mini" @click="saveDoc">{{ editable?'保存修改':'开始编辑' }}</el-button>
         <el-popover placement="top" width="300" v-model="visible">
           <el-tag
-            :key="tag"
+            :key="tag.id"
             v-for="tag in docTags"
-            closable
+            :closable="editable"
             :disable-transitions="false"
             @close="handleClose(tag)"
-          >{{tag}}</el-tag>
+          >{{tag.name}}</el-tag>
           <el-input
             class="input-new-tag"
             v-if="inputVisible"
@@ -53,11 +80,23 @@
             @keyup.enter.native="handleInputConfirm"
             @blur="handleInputConfirm"
           ></el-input>
-          <el-button v-else class="button-new-tag" size="small" @click="showInput">+ 新标签</el-button>
+          <el-button
+            v-else
+            class="button-new-tag"
+            size="small"
+            @click="showInput"
+            :style="{display: editable?'inline-block':'none'}"
+          >+ 新标签</el-button>
           <el-button slot="reference" size="mini">标签</el-button>
         </el-popover>
       </div>
-      <el-tiptap v-model="content" :extensions="extensions" :readonly="!editable" height="100%"></el-tiptap>
+      <el-tiptap
+        v-model="content"
+        :extensions="extensions"
+        :readonly="!editable"
+        height="100%"
+        :class="{readonly: !editable}"
+      ></el-tiptap>
     </div>
   </div>
 </template>
@@ -65,7 +104,9 @@
 <script>
 // @ is an alias to /src
 // import HelloWorld from '@/components/HelloWorld.vue'
-import sq3 from 'sqlite3'
+// import sq3 from 'sqlite3'
+import db from '../utils/sql-util'
+import { createMDFile } from '../utils/file-util'
 import {
   ElementTiptap, // 需要的 extensions
   Doc,
@@ -91,9 +132,9 @@ import {
 // import element-tiptap 样式
 import 'element-tiptap/lib/index.css'
 // const sharedObject = require('electron').remote.getGlobal('sharedObject')
-const ipcRenderer = require('electron').ipcRenderer
+// const ipcRenderer = require('electron').ipcRenderer
 // const currentPath = sharedObject ? sharedObject.currentPath : null
-const sqlite3 = sq3.verbose()
+// const sqlite3 = sq3.verbose()
 
 function findChildren(parent, list) {
   const nodes = []
@@ -118,10 +159,32 @@ export default {
       docs: [],
       searchStr: '',
       content: '',
+      currentDocId: null,
       title: '',
       editable: false,
       visible: false,
-      docTags: ['1', '2'],
+      newDocVisible: false,
+      newDocType: 'text',
+      docTags: [],
+      docType: 'text',
+      types: [
+        {
+          value: 'md',
+          label: 'Markdown'
+        },
+        {
+          value: 'mm',
+          label: '脑图'
+        },
+        {
+          value: 'doc',
+          label: 'Word'
+        },
+        {
+          value: 'text',
+          label: '文本'
+        }
+      ],
       inputVisible: false,
       inputValue: '',
       extensions: [
@@ -151,67 +214,196 @@ export default {
     'el-tiptap': ElementTiptap
   },
   mounted() {
-    ipcRenderer.on('open-db', (event, arg) => {
-      if (arg) {
-        var db
-        const that = this
-        db = new sqlite3.Database(arg + '\\info.db', function() {
-          db.all('select * from km_directory order by id desc', function(
-            err,
-            rows
-          ) {
-            if (!err) {
-              that.directorys.push({
-                label: '全部',
-                children: findChildren(0, rows)
-              })
-            } else {
-              console.log(err)
-            }
-          })
-          db.all('select * from km_tag order by id desc', function(err, rows) {
-            if (!err) {
-              rows.forEach(row => {
-                that.tags.push({
-                  id: row.ID,
-                  name: row.NAME
-                })
-              })
-            } else {
-              console.log(err)
-            }
-          })
-          db.all('select * from km_document order by id desc', function(
-            err,
-            rows
-          ) {
-            if (!err) {
-              rows.forEach(row => {
-                that.docs.push({
-                  id: row.ID,
-                  title: row.TITLE
-                })
-              })
-            } else {
-              console.log(err)
-            }
-          })
+    const that = this
+    db.all('select * from km_directory order by id desc', function(err, rows) {
+      if (!err) {
+        that.directorys.push({
+          label: '全部',
+          children: findChildren(0, rows)
         })
+      } else {
+        console.log(err)
       }
     })
+      .all('select * from km_tag order by id desc', function(err, rows) {
+        if (!err) {
+          rows.forEach(row => {
+            that.tags.push({
+              id: row.ID,
+              name: row.NAME
+            })
+          })
+        } else {
+          console.log(err)
+        }
+      })
+      .all('select * from km_document order by id desc', function(err, rows) {
+        if (!err) {
+          rows.forEach(row => {
+            that.docs.push({
+              id: row.ID,
+              title: row.TITLE
+            })
+          })
+        } else {
+          console.log(err)
+        }
+      })
   },
   methods: {
+    treeNodeClick(nodeData) {
+      const that = this
+      const directoryId = nodeData.id
+      db.all(
+        'select * from km_document where directory_id=? order by id desc',
+        [directoryId],
+        function(err, rows) {
+          if (!err) {
+            that.docs.splice(0, that.docs.length)
+            rows.forEach(row => {
+              that.docs.push({
+                id: row.ID,
+                title: row.TITLE
+              })
+            })
+          } else {
+            console.log(err)
+          }
+        }
+      )
+    },
+    newDoc() {
+      const that = this
+      let path = ''
+      // 先新增个记录
+      if (this.newDocType === 'md') {
+        // 需要新增md文件
+        path = createMDFile()
+      } else if (this.newDocType === 'doc' || this.newDocType === 'mm') {
+        // 需要导入文件
+      }
+      db.run(
+        'insert into KM_DOCUMENT (create_time,update_time,title,content,type,directory_id,path) values ($createTime,$updateTime,$title,$content,$type,$directoryId,$path)',
+        {
+          $createTime: Math.floor(Date.now() / 1000),
+          $updateTime: Math.floor(Date.now() / 1000),
+          $title: '未命名',
+          $content: '',
+          $type: this.newDocType,
+          $directoryId: this.$refs.directoryTree.getCurrentKey() || 0,
+          $path: path
+        },
+        function(err) {
+          if (!err) {
+            const directoryId = that.$refs.directoryTree.getCurrentKey() || 0
+            db.all(
+              'select * from km_document where directory_id=? order by id desc',
+              [directoryId],
+              function(err, rows) {
+                if (!err) {
+                  that.docs.splice(0, that.docs.length)
+                  rows.forEach(row => {
+                    that.docs.push({
+                      id: row.ID,
+                      title: row.TITLE
+                    })
+                  })
+                } else {
+                  console.log(err)
+                }
+              }
+            )
+          } else {
+            console.log(err)
+          }
+        }
+      )
+      // 再刷新表格
+      this.newDocVisible = false
+    },
     showDoc(docId) {
-      console.log(docId)
+      this.currentDocId = docId
+      const that = this
+      db.get(
+        'select * from km_document where id=? order by id desc',
+        [docId],
+        function(err, row) {
+          if (!err && row) {
+            that.content = row.CONTENT
+            that.title = row.TITLE
+            that.docType = row.TYPE
+            // 获取文档的标签
+            db.all(
+              'select a.* from KM_TAG a INNER JOIN KM_DOC_TAG b ON a.ID=b.TAG_ID WHERE b.DOC_ID=? order by a.ID desc',
+              [docId],
+              function(err, rows) {
+                that.docTags.splice(0, that.docTags.length)
+                if (!err) {
+                  rows.forEach(row => {
+                    that.docTags.push({
+                      id: row.ID,
+                      name: row.NAME
+                    })
+                  })
+                } else {
+                  console.log(err)
+                }
+              }
+            )
+          } else {
+            console.log(err)
+          }
+        }
+      )
     },
     saveDoc() {
+      if (!this.currentDocId) {
+        this.editable = false
+        return
+      }
+      if (this.editable) {
+        const that = this
+        db.run(
+          'update km_document set title=$title,content=$content,update_time=$updateTime where id=$id',
+          {
+            $title: this.title,
+            $content: this.content,
+            $updateTime: Math.floor(Date.now() / 1000),
+            $id: this.currentDocId
+          },
+          function(err) {
+            if (!err) {
+              // 同步更新列表
+              const currentDoc = that.docs.find(
+                doc => doc.id === that.currentDocId
+              )
+              if (currentDoc) {
+                currentDoc.title = that.title
+              }
+            } else {
+              console.log(err)
+            }
+          }
+        )
+      }
       this.editable = !this.editable
-      document.getElementsByClassName(
-        'el-tiptap-editor__menu-bar'
-      )[0].style.display = this.editable ? 'flex' : 'none'
     },
     handleClose(tag) {
-      this.docTags.splice(this.docTags.indexOf(tag), 1)
+      const that = this
+      db.run(
+        'DELETE FROM KM_DOC_TAG WHERE DOC_ID=? AND TAG_ID IN (SELECT ID FROM KM_TAG WHERE NAME=?)',
+        [this.currentDocId, tag.name],
+        function(err) {
+          if (!err) {
+            that.docTags.splice(
+              that.docTags.findIndex(item => item.name === tag.name),
+              1
+            )
+          } else {
+            console.log(err)
+          }
+        }
+      )
     },
     showInput() {
       this.inputVisible = true
@@ -219,10 +411,55 @@ export default {
         this.$refs.saveTagInput.$refs.input.focus()
       })
     },
-    handleInputConfirm() {
+    handleInputConfirm(event) {
       const inputValue = this.inputValue
       if (inputValue) {
-        this.docTags.push(inputValue)
+        // 校验标签是否重复
+        if (this.docTags.findIndex(item => item.name === inputValue) > -1) {
+          this.$message({
+            message: `标签 ${inputValue} 已存在`,
+            type: 'warning'
+          })
+          return
+        }
+        const that = this
+        // 判断标签是否存在
+        db.get(
+          'SELECT COUNT(*) a FROM KM_TAG WHERE NAME=?',
+          [inputValue],
+          function(err, row) {
+            if (!err) {
+              db.serialize(function() {
+                db.run('BEGIN')
+                try {
+                  if (row.a === 0) {
+                    db.run(
+                      'INSERT INTO KM_TAG (CREATE_TIME,UPDATE_TIME,NAME) VALUES ($createTime,$updateTime,$name)',
+                      {
+                        $createTime: Math.floor(Date.now() / 1000),
+                        $updateTime: Math.floor(Date.now() / 1000),
+                        $name: inputValue
+                      }
+                    )
+                  }
+                  db.run(
+                    'INSERT INTO KM_DOC_TAG (DOC_ID,TAG_ID) SELECT ' +
+                      that.currentDocId +
+                      ' DOC_ID, ID TAG_ID FROM KM_TAG WHERE NAME=?',
+                    [inputValue]
+                  )
+                  that.docTags.push({ name: inputValue })
+                  db.run('COMMIT')
+                } catch (err2) {
+                  console.log(err2)
+                  db.run('ROLLBACK')
+                }
+              })
+            } else {
+              console.log(err)
+            }
+          }
+        )
       }
       this.inputVisible = false
       this.inputValue = ''
@@ -252,6 +489,8 @@ export default {
   .list li
     text-align left
     cursor pointer
+  .el-input
+    width 140px
 .main
   width 100%
   display flex
@@ -259,12 +498,16 @@ export default {
   align-items flex-start
   .el-input
     width 200px
-.el-tiptap-editor__menu-bar, .el-tiptap-editor>.el-tiptap-editor__content, .el-tiptap-editor__footer
-  border 0
-.el-tiptap-editor__menu-bar:before
-  height 0
-.el-tiptap-editor>.el-tiptap-editor__content
-  padding 10px
+  .el-select>.el-input
+    width 110px
+  .el-tiptap-editor__menu-bar, .el-tiptap-editor>.el-tiptap-editor__content, .el-tiptap-editor__footer
+    border 0
+  .el-tiptap-editor__menu-bar:before
+    height 0
+  .el-tiptap-editor>.el-tiptap-editor__content
+    padding 10px
+  .readonly .el-tiptap-editor__menu-bar
+    display none
 .el-tag
   margin-right 5px
   margin-bottom 5px
@@ -278,4 +521,6 @@ export default {
   width 90px
   vertical-align bottom
   margin-bottom 5px
+.el-popover>.el-select
+  margin 5px 0
 </style>
