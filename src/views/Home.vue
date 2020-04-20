@@ -89,6 +89,7 @@
           >+ 新标签</el-button>
           <el-button slot="reference" size="mini">标签</el-button>
         </el-popover>
+        <el-button size="mini" v-if="showOpenFile" @click="openFile">打开文件</el-button>
       </div>
       <el-tiptap
         v-model="content"
@@ -98,6 +99,28 @@
         :class="{readonly: !editable}"
       ></el-tiptap>
     </div>
+    <el-dialog title="提示" :visible.sync="showUploader" width="100%" :before-close="handleClose">
+      <el-upload
+        action="abc"
+        class="upload-demo"
+        drag
+        :accept="allowType"
+        :auto-upload="false"
+        :http-request="upload"
+        ref="uploader"
+      >
+        <i class="el-icon-upload"></i>
+        <div class="el-upload__text">
+          将文件拖到此处，或
+          <em>点击上传</em>
+        </div>
+        <div class="el-upload__tip" slot="tip">只能上传{{ allowType }}文件，且不超过500kb</div>
+      </el-upload>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="showUploader = false">取 消</el-button>
+        <el-button type="primary" @click="submitUpload">确 定</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -106,7 +129,9 @@
 // import HelloWorld from '@/components/HelloWorld.vue'
 // import sq3 from 'sqlite3'
 import db from '../utils/sql-util'
-import { createMDFile } from '../utils/file-util'
+import { createMDFile, copyFile } from '../utils/file-util'
+import { exec } from 'child_process'
+import global from '../utils/global'
 import {
   ElementTiptap, // 需要的 extensions
   Doc,
@@ -131,10 +156,6 @@ import {
 } from 'element-tiptap'
 // import element-tiptap 样式
 import 'element-tiptap/lib/index.css'
-// const sharedObject = require('electron').remote.getGlobal('sharedObject')
-// const ipcRenderer = require('electron').ipcRenderer
-// const currentPath = sharedObject ? sharedObject.currentPath : null
-// const sqlite3 = sq3.verbose()
 
 function findChildren(parent, list) {
   const nodes = []
@@ -167,6 +188,7 @@ export default {
       newDocType: 'text',
       docTags: [],
       docType: 'text',
+      showUploader: false,
       types: [
         {
           value: 'md',
@@ -281,6 +303,8 @@ export default {
         path = createMDFile()
       } else if (this.newDocType === 'doc' || this.newDocType === 'mm') {
         // 需要导入文件
+        this.showUploader = true
+        return
       }
       db.run(
         'insert into KM_DOCUMENT (create_time,update_time,title,content,type,directory_id,path) values ($createTime,$updateTime,$title,$content,$type,$directoryId,$path)',
@@ -295,6 +319,7 @@ export default {
         },
         function(err) {
           if (!err) {
+            // 再刷新表格
             const directoryId = that.$refs.directoryTree.getCurrentKey() || 0
             db.all(
               'select * from km_document where directory_id=? order by id desc',
@@ -318,7 +343,6 @@ export default {
           }
         }
       )
-      // 再刷新表格
       this.newDocVisible = false
     },
     showDoc(docId) {
@@ -463,6 +487,97 @@ export default {
       }
       this.inputVisible = false
       this.inputValue = ''
+    },
+    openFile() {
+      db.get(
+        'SELECT PATH,TYPE FROM KM_DOCUMENT WHERE ID=?',
+        [this.currentDocId],
+        function(err, row) {
+          if (!err) {
+            if (row.PATH) {
+              let cmd = ''
+              // 打开文件
+              if (row.TYPE === 'md') {
+                cmd = `D:\\Program\\Typora\\Typora.exe ${global.currentPath}\\attach\\${row.PATH}`
+              } else if (row.TYPE === 'mm') {
+                cmd = `"C:\\Program Files\\XMind\\XMind.exe" ${global.currentPath}\\attach\\${row.PATH}`
+              } else if (row.TYPE === 'doc') {
+                // TODO
+              }
+              if (cmd) {
+                exec(cmd, function(err, stdout, stderr) {
+                  if (err) {
+                    console.log(err)
+                  }
+                })
+              }
+            }
+          } else {
+            console.log(err)
+          }
+        }
+      )
+    },
+    upload(arg) {
+      const path = copyFile(arg.file)
+      const that = this
+      db.run(
+        'insert into KM_DOCUMENT (create_time,update_time,title,content,type,directory_id,path) values ($createTime,$updateTime,$title,$content,$type,$directoryId,$path)',
+        {
+          $createTime: Math.floor(Date.now() / 1000),
+          $updateTime: Math.floor(Date.now() / 1000),
+          $title: '未命名',
+          $content: '',
+          $type: this.newDocType,
+          $directoryId: this.$refs.directoryTree.getCurrentKey() || 0,
+          $path: path
+        },
+        function(err) {
+          if (!err) {
+            // 再刷新表格
+            const directoryId = that.$refs.directoryTree.getCurrentKey() || 0
+            db.all(
+              'select * from km_document where directory_id=? order by id desc',
+              [directoryId],
+              function(err, rows) {
+                if (!err) {
+                  that.docs.splice(0, that.docs.length)
+                  rows.forEach(row => {
+                    that.docs.push({
+                      id: row.ID,
+                      title: row.TITLE
+                    })
+                  })
+                } else {
+                  console.log(err)
+                }
+              }
+            )
+          } else {
+            console.log(err)
+          }
+        }
+      )
+      this.newDocVisible = false
+      this.showUploader = false
+    },
+    submitUpload() {
+      this.$refs.uploader.submit()
+    }
+  },
+  computed: {
+    showOpenFile() {
+      return this.docType !== 'text'
+    },
+    allowType() {
+      switch (this.newDocType) {
+        case 'doc':
+          return '.doc,.docx'
+        case 'mm':
+          return '.xmind'
+        default:
+          return ''
+      }
     }
   }
 }
@@ -473,7 +588,8 @@ export default {
   display flex
   height 100%
 .left
-  width 250px
+  width 200px
+  flex 0 0 200px
   .category
     max-height 300px
     overflow auto
@@ -486,11 +602,13 @@ export default {
       cursor pointer
 .middle
   width 300px
+  flex 0 0 300px
+  text-align left
   .list li
     text-align left
     cursor pointer
   .el-input
-    width 140px
+    width 200px
 .main
   width 100%
   display flex
