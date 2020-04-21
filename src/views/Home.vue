@@ -1,23 +1,44 @@
 <template>
   <div class="home">
     <div class="left">
-      分类
       <div class="category">
         <el-tree
+          :indent="10"
           :data="directorys"
           :expand-on-click-node="false"
           :node-key="'id'"
           :default-expand-all="true"
           ref="directoryTree"
           @node-click="treeNodeClick"
+          @node-contextmenu="treeNodeMenu"
           height="100%"
           :highlight-current="true"
-        ></el-tree>
-      </div>标签
+          icon-class="el-icon-arrow-right"
+        >
+          <span class="directory-tree-node" slot-scope="{ node }">
+            <i class="el-icon-folder"></i>
+            <span>{{ node.label }}</span>
+          </span>
+        </el-tree>
+      </div>
       <div class="tag">
-        <div v-for="tag in tags" :key="tag.id">
-          <el-tag :id="tag.id">{{tag.name}}</el-tag>
-        </div>
+        <el-tree
+          :indent="10"
+          :data="tags"
+          :expand-on-click-node="false"
+          :node-key="'id'"
+          :default-expand-all="true"
+          ref="tagTree"
+          @node-click="tagTreeNodeClick"
+          height="100%"
+          :highlight-current="true"
+          icon-class="el-icon-arrow-right"
+        >
+          <span class="tag-tree-node" slot-scope="{ node }">
+            <i class="el-icon-collection-tag"></i>
+            <span>{{ node.label }}</span>
+          </span>
+        </el-tree>
       </div>
     </div>
     <div class="middle">
@@ -47,7 +68,14 @@
       </div>
       <div class="list">
         <ul>
-          <li v-for="doc in docs" :key="doc.id" @click="showDoc(doc.id)">{{ doc.title }}</li>
+          <li
+            v-for="doc in docs"
+            :key="doc.id"
+            @click="showDoc(doc.id)"
+            :class="{active: doc.id===currentDocId}"
+          >
+            <span>{{ doc.title }}</span>
+          </li>
         </ul>
       </div>
     </div>
@@ -156,6 +184,7 @@ import {
 } from 'element-tiptap'
 // import element-tiptap 样式
 import 'element-tiptap/lib/index.css'
+import { remote } from 'electron'
 
 function findChildren(parent, list) {
   const nodes = []
@@ -240,7 +269,8 @@ export default {
     db.all('select * from km_directory order by id desc', function(err, rows) {
       if (!err) {
         that.directorys.push({
-          label: '全部',
+          label: '文件夹',
+          id: 0,
           children: findChildren(0, rows)
         })
       } else {
@@ -249,10 +279,10 @@ export default {
     })
       .all('select * from km_tag order by id desc', function(err, rows) {
         if (!err) {
-          rows.forEach(row => {
-            that.tags.push({
-              id: row.ID,
-              name: row.NAME
+          that.tags.push({
+            label: '标签',
+            children: rows.map(row => {
+              return { label: row.NAME, id: row.ID }
             })
           })
         } else {
@@ -294,6 +324,46 @@ export default {
         }
       )
     },
+    treeNodeMenu(event, nodeData) {
+      const Menu = remote.Menu
+      const MenuItem = remote.MenuItem
+      const menu = new Menu()
+      const that = this
+      menu.append(
+        new MenuItem({
+          label: '新增文件夹',
+          click: function() {}
+        })
+      )
+      if (nodeData.id !== 0) {
+        // 根节点不允许删除
+        menu.append(
+          new MenuItem({
+            label: '删除文件夹',
+            click: function() {
+              that
+                .$confirm(
+                  '此操作将同时删除当前文件夹下所有文档, 是否继续?',
+                  '提示',
+                  {
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                  }
+                )
+                .then(() => {
+                  that.$message({
+                    type: 'success',
+                    message: '删除成功'
+                  })
+                })
+            }
+          })
+        )
+      }
+      menu.popup(remote.getCurrentWindow())
+    },
+    tagTreeNodeClick() {},
     newDoc() {
       const that = this
       let path = ''
@@ -593,13 +663,13 @@ export default {
   .category
     max-height 300px
     overflow auto
+    .directory-tree-node>span
+      padding-left 5px
   .tag
     max-height 300px
     overflow auto
-    div
-      margin 4px
-    .el-tag
-      cursor pointer
+  .el-tree-node
+    margin 4px
 .middle
   width 300px
   flex 0 0 300px
@@ -607,6 +677,12 @@ export default {
   .list li
     text-align left
     cursor pointer
+    display block
+    padding 7px 12px
+    &:hover
+      background-color #F5F7FA
+    &.active
+      background-color #f0f7ff
   .el-input
     width 200px
 .main
