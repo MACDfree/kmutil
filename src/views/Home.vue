@@ -97,7 +97,7 @@
             v-for="tag in docTags"
             :closable="editable"
             :disable-transitions="false"
-            @close="handleClose(tag)"
+            @close="deleteDocTag(tag)"
           >{{tag.name}}</el-tag>
           <el-input
             class="input-new-tag"
@@ -127,9 +127,9 @@
         :class="{readonly: !editable}"
       ></el-tiptap>
     </div>
-    <el-dialog title="提示" :visible.sync="showUploader" width="100%" :before-close="handleClose">
+    <el-dialog title="导入文档" :visible.sync="showUploader" width="100%">
       <el-upload
-        action="abc"
+        action="empty"
         class="upload-demo"
         drag
         :accept="allowType"
@@ -147,6 +147,13 @@
       <span slot="footer" class="dialog-footer">
         <el-button @click="showUploader = false">取 消</el-button>
         <el-button type="primary" @click="submitUpload">确 定</el-button>
+      </span>
+    </el-dialog>
+    <el-dialog title="修改文件夹名称" :visible.sync="showDirectoryEdit" width="30%">
+      <el-input v-model="newDirectoryName" placeholder="请输入文件夹名称"></el-input>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="showDirectoryEdit = false;newDirectoryName=''">取 消</el-button>
+        <el-button type="primary" @click="submitDirectory">确 定</el-button>
       </span>
     </el-dialog>
   </div>
@@ -218,6 +225,10 @@ export default {
       docTags: [],
       docType: 'text',
       showUploader: false,
+      showDirectoryEdit: false,
+      newDirectoryName: '',
+      currentDirectoryId: null,
+      isAddChild: false,
       types: [
         {
           value: 'md',
@@ -266,7 +277,10 @@ export default {
   },
   mounted() {
     const that = this
-    db.all('select * from km_directory order by id desc', function(err, rows) {
+    db.all('select * from km_directory order by create_time', function(
+      err,
+      rows
+    ) {
       if (!err) {
         that.directorys.push({
           label: '文件夹',
@@ -277,7 +291,7 @@ export default {
         console.log(err)
       }
     })
-      .all('select * from km_tag order by id desc', function(err, rows) {
+      .all('select * from km_tag order by create_time', function(err, rows) {
         if (!err) {
           that.tags.push({
             label: '标签',
@@ -289,7 +303,10 @@ export default {
           console.log(err)
         }
       })
-      .all('select * from km_document order by id desc', function(err, rows) {
+      .all('select * from km_document order by create_time desc', function(
+        err,
+        rows
+      ) {
         if (!err) {
           rows.forEach(row => {
             that.docs.push({
@@ -307,7 +324,7 @@ export default {
       const that = this
       const directoryId = nodeData.id
       db.all(
-        'select * from km_document where directory_id=? order by id desc',
+        'select * from km_document where directory_id=? order by create_time desc',
         [directoryId],
         function(err, rows) {
           if (!err) {
@@ -331,11 +348,26 @@ export default {
       const that = this
       menu.append(
         new MenuItem({
-          label: '新增文件夹',
-          click: function() {}
+          label: '新增子文件夹',
+          click: function() {
+            that.currentDirectoryId = nodeData.id
+            that.isAddChild = true
+            that.showDirectoryEdit = true
+          }
         })
       )
       if (nodeData.id !== 0) {
+        menu.append(
+          new MenuItem({
+            label: '修改文件夹',
+            click: function() {
+              that.currentDirectoryId = nodeData.id
+              that.newDirectoryName = nodeData.label
+              that.isAddChild = false
+              that.showDirectoryEdit = true
+            }
+          })
+        )
         // 根节点不允许删除
         menu.append(
           new MenuItem({
@@ -352,6 +384,24 @@ export default {
                   }
                 )
                 .then(() => {
+                  db.all('select * from km_directory', function(err, rows) {
+                    if (!err) {
+                      // 查出所有要删除的文件夹id
+                      db.serialize(function() {
+                        db.run('BEGIN')
+                        try {
+                          // 删除关联的文档
+                          // 删除当前节点及其子节点
+                          db.run('COMMIT')
+                        } catch (err) {
+                          console.log(err)
+                          db.run('ROLLBACK')
+                        }
+                      })
+                    } else {
+                      console.log(err)
+                    }
+                  })
                   that.$message({
                     type: 'success',
                     message: '删除成功'
@@ -362,6 +412,51 @@ export default {
         )
       }
       menu.popup(remote.getCurrentWindow())
+    },
+    submitDirectory() {
+      const that = this
+      if (this.isAddChild) {
+        db.run(
+          'INSERT INTO KM_DIRECTORY (CREATE_TIME,UPDATE_TIME,NAME,PARENT) VALUES ($createTime,$updateTime,$name,$parent)',
+          {
+            $createTime: Math.floor(Date.now() / 1000),
+            $updateTime: Math.floor(Date.now() / 1000),
+            $name: this.newDirectoryName,
+            $parent: this.currentDirectoryId
+          },
+          function(err) {
+            if (!err) {
+              console.log(this)
+              that.showDirectoryEdit = false
+              that.$refs.directoryTree.append(
+                { label: that.newDirectoryName, id: this.lastID },
+                that.currentDirectoryId
+              )
+            } else {
+              console.log(err)
+            }
+          }
+        )
+      } else {
+        db.run(
+          'UPDATE KM_DIRECTORY SET UPDATE_TIME=$updateTime,NAME=$name WHERE ID=$id',
+          {
+            $updateTime: Math.floor(Date.now() / 1000),
+            $name: this.newDirectoryName,
+            $id: this.currentDirectoryId
+          },
+          function(err) {
+            if (!err) {
+              that.showDirectoryEdit = false
+              that.$refs.directoryTree.getNode(
+                that.currentDirectoryId
+              ).data.label = that.newDirectoryName
+            } else {
+              console.log(err)
+            }
+          }
+        )
+      }
     },
     tagTreeNodeClick() {},
     newDoc() {
@@ -482,7 +577,7 @@ export default {
       }
       this.editable = !this.editable
     },
-    handleClose(tag) {
+    deleteDocTag(tag) {
       const that = this
       db.run(
         'DELETE FROM KM_DOC_TAG WHERE DOC_ID=? AND TAG_ID IN (SELECT ID FROM KM_TAG WHERE NAME=?)',
@@ -661,12 +756,10 @@ export default {
   width 200px
   flex 0 0 200px
   .category
-    max-height 300px
     overflow auto
     .directory-tree-node>span
       padding-left 5px
   .tag
-    max-height 300px
     overflow auto
   .el-tree-node
     margin 4px
