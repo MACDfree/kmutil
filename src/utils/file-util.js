@@ -37,3 +37,37 @@ export function copyFile(file) {
   fs.copyFileSync(file.path, filePath)
   return filePath.replace(currentPath + '\\attach\\', '')
 }
+
+export function deleteFile(innerFilePath) {
+  const sharedObject = remote.getGlobal('sharedObject')
+  if (!sharedObject || !sharedObject.currentPath) {
+    throw new Error('currentPath is null')
+  }
+  const currentPath = sharedObject.currentPath
+  const filePath = currentPath + '\\attach\\' + innerFilePath
+  if (fs.existsSync(filePath)) {
+    let dirPath = filePath.substring(0, filePath.lastIndexOf('\\'))
+    deleteDir(dirPath)
+    dirPath = dirPath.substring(0, dirPath.lastIndexOf('\\'))
+    if (fs.readdirSync(dirPath).length === 0) {
+      fs.rmdirSync(dirPath)
+    }
+  }
+}
+
+function deleteDir(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    return
+  }
+
+  const files = fs.readdirSync(dirPath)
+  files.forEach(file => {
+    const filePath = dirPath + '\\' + file
+    if (fs.statSync(filePath).isDirectory()) {
+      deleteDir(filePath)
+    } else {
+      fs.unlinkSync(filePath)
+    }
+  })
+  fs.rmdirSync(dirPath)
+}

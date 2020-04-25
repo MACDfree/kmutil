@@ -164,7 +164,7 @@
 // import HelloWorld from '@/components/HelloWorld.vue'
 // import sq3 from 'sqlite3'
 import db from '../utils/sql-util'
-import { createMDFile, copyFile } from '../utils/file-util'
+import { createMDFile, copyFile, deleteFile } from '../utils/file-util'
 import { exec } from 'child_process'
 import global from '../utils/global'
 import {
@@ -205,6 +205,15 @@ function findChildren(parent, list) {
     }
   })
   return nodes
+}
+
+function findDeleteIds(list, pid, deleteIds) {
+  list.forEach(row => {
+    if (row.PARENT === pid) {
+      deleteIds.push(row.ID)
+      findDeleteIds(list, row.ID, deleteIds)
+    }
+  })
 }
 
 export default {
@@ -386,18 +395,50 @@ export default {
                 .then(() => {
                   db.all('select * from km_directory', function(err, rows) {
                     if (!err) {
-                      // 查出所有要删除的文件夹id
-                      db.serialize(function() {
-                        db.run('BEGIN')
-                        try {
-                          // 删除关联的文档
-                          // 删除当前节点及其子节点
-                          db.run('COMMIT')
-                        } catch (err) {
-                          console.log(err)
-                          db.run('ROLLBACK')
+                      const deleteIds = [nodeData.id]
+                      findDeleteIds(rows, nodeData.id, deleteIds)
+                      db.all(
+                        'select * from km_document where directory_id in (' +
+                          deleteIds.map(_ => '?') +
+                          ')',
+                        deleteIds,
+                        function(err, rows) {
+                          if (!err) {
+                            // 查出所有要删除的文件夹id
+                            db.serialize(function() {
+                              db.run('BEGIN')
+                              try {
+                                // 删除关联的文档
+                                db.run(
+                                  'delete from km_document where directory_id in (' +
+                                    deleteIds.map(_ => '?') +
+                                    ')',
+                                  deleteIds
+                                )
+                                // 删除当前节点及其子节点
+                                db.run(
+                                  'delete from km_directory where id in (' +
+                                    deleteIds.map(_ => '?') +
+                                    ')',
+                                  deleteIds
+                                )
+                                // 删除实体文件
+                                rows.forEach(row => {
+                                  if (row.PATH) {
+                                    deleteFile(row.PATH)
+                                  }
+                                })
+                                db.run('COMMIT')
+                              } catch (err) {
+                                console.log(err)
+                                db.run('ROLLBACK')
+                              }
+                            })
+                          } else {
+                            console.log(err)
+                          }
                         }
-                      })
+                      )
                     } else {
                       console.log(err)
                     }
