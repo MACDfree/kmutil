@@ -74,6 +74,7 @@
             :key="doc.id"
             @click="showDoc(doc.id)"
             :class="{active: doc.id===currentDocId}"
+            @click.right="docMenu(doc)"
           >
             <span>{{ doc.title }}</span>
           </li>
@@ -215,11 +216,11 @@ function findChildren(parent, list) {
   return nodes
 }
 
-function findDeleteIds(list, pid, deleteIds) {
+function findChildIds(list, pid, deleteIds) {
   list.forEach(row => {
     if (row.PARENT === pid) {
       deleteIds.push(row.ID)
-      findDeleteIds(list, row.ID, deleteIds)
+      findChildIds(list, row.ID, deleteIds)
     }
   })
 }
@@ -332,7 +333,8 @@ export default {
           rows.forEach(row => {
             that.docs.push({
               id: row.ID,
-              title: row.TITLE
+              title: row.TITLE,
+              path: row.PATH
             })
           })
         } else {
@@ -342,25 +344,57 @@ export default {
   },
   methods: {
     treeNodeClick(nodeData) {
+      this.$refs.tagTree.setCurrentKey(null)
       const that = this
       const directoryId = nodeData.id
-      db.all(
-        'select * from km_document where directory_id=? order by create_time desc',
-        [directoryId],
-        function(err, rows) {
+      if (directoryId === 0) {
+        db.all('select * from km_document order by create_time desc', function(
+          err,
+          rows
+        ) {
           if (!err) {
             that.docs.splice(0, that.docs.length)
             rows.forEach(row => {
               that.docs.push({
                 id: row.ID,
-                title: row.TITLE
+                title: row.TITLE,
+                path: row.PATH
               })
             })
           } else {
             console.log(err)
           }
-        }
-      )
+        })
+      } else {
+        db.all('select * from km_directory', function(err, rows) {
+          if (!err) {
+            const ids = [directoryId]
+            findChildIds(rows, directoryId, ids)
+            db.all(
+              'select * from km_document where directory_id in (' +
+                ids.map(_ => '?') +
+                ') order by create_time desc',
+              ids,
+              function(err, rows) {
+                if (!err) {
+                  that.docs.splice(0, that.docs.length)
+                  rows.forEach(row => {
+                    that.docs.push({
+                      id: row.ID,
+                      title: row.TITLE,
+                      path: row.PATH
+                    })
+                  })
+                } else {
+                  console.log(err)
+                }
+              }
+            )
+          } else {
+            console.log(err)
+          }
+        })
+      }
     },
     treeNodeMenu(event, nodeData) {
       const Menu = remote.Menu
@@ -408,7 +442,7 @@ export default {
                   db.all('select * from km_directory', function(err, rows) {
                     if (!err) {
                       const deleteIds = [nodeData.id]
-                      findDeleteIds(rows, nodeData.id, deleteIds)
+                      findChildIds(rows, nodeData.id, deleteIds)
                       db.all(
                         'select * from km_document where directory_id in (' +
                           deleteIds.map(_ => '?') +
@@ -504,27 +538,85 @@ export default {
         new MenuItem({
           label: '删除标签',
           click: function() {
-            // 删除标签，需要同步删除关联表
-            db.serialize(function() {
-              db.run('BEGIN')
-              try {
-                db.run('DELETE FROM KM_DOC_TAG WHERE TAG_ID=?', [nodeData.id])
-                db.run('DELETE FROM KM_TAG WHERE ID=?', [nodeData.id])
-                that.$refs.tagTree.remove(nodeData.id)
-                db.run('COMMIT')
-                that.$message({
-                  type: 'success',
-                  message: '删除成功'
+            that
+              .$confirm('此操作将删除当前标签, 是否继续?', '提示', {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+              })
+              .then(() => {
+                // 删除标签，需要同步删除关联表
+                db.serialize(function() {
+                  db.run('BEGIN')
+                  try {
+                    db.run('DELETE FROM KM_DOC_TAG WHERE TAG_ID=?', [
+                      nodeData.id
+                    ])
+                    db.run('DELETE FROM KM_TAG WHERE ID=?', [nodeData.id])
+                    that.$refs.tagTree.remove(nodeData.id)
+                    db.run('COMMIT')
+                    that.$message({
+                      type: 'success',
+                      message: '删除成功'
+                    })
+                  } catch (err) {
+                    console.log(err)
+                    db.run('ROLLBACK')
+                    that.$message({
+                      type: 'error',
+                      message: '删除失败'
+                    })
+                  }
                 })
-              } catch (err) {
-                console.log(err)
-                db.run('ROLLBACK')
-                that.$message({
-                  type: 'error',
-                  message: '删除失败'
+              })
+          }
+        })
+      )
+      menu.popup(remote.getCurrentWindow())
+    },
+    docMenu(doc) {
+      const Menu = remote.Menu
+      const MenuItem = remote.MenuItem
+      const menu = new Menu()
+      const that = this
+      menu.append(
+        new MenuItem({
+          label: '删除文档',
+          click: function() {
+            that
+              .$confirm('此操作将删除当前文档, 是否继续?', '提示', {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+              })
+              .then(() => {
+                db.serialize(function() {
+                  db.run('BEGIN')
+                  try {
+                    db.run('delete from km_document where id=?', doc.id)
+                    // 删除实体文件
+                    if (doc.path) {
+                      deleteFile(doc.path)
+                    }
+                    db.run('COMMIT')
+                    that.docs.splice(
+                      that.docs.findIndex(item => item.id === doc.id),
+                      1
+                    )
+                    that.$message({
+                      type: 'success',
+                      message: '删除成功'
+                    })
+                  } catch (err) {
+                    console.log(err)
+                    db.run('ROLLBACK')
+                    that.$message({
+                      type: 'error',
+                      message: '删除失败'
+                    })
+                  }
                 })
-              }
-            })
+              })
           }
         })
       )
@@ -576,7 +668,27 @@ export default {
       }
     },
     tagTreeNodeClick(nodeData) {
-      // 联动显示
+      this.$refs.directoryTree.setCurrentKey(null)
+      const that = this
+      const tagId = nodeData.id
+      db.all(
+        'SELECT a.* FROM KM_DOCUMENT a INNER JOIN KM_DOC_TAG b ON a.ID=b.DOC_ID WHERE b.TAG_ID=? ORDER BY a.CREATE_TIME DESC',
+        [tagId],
+        function(err, rows) {
+          if (!err) {
+            that.docs.splice(0, that.docs.length)
+            rows.forEach(row => {
+              that.docs.push({
+                id: row.ID,
+                title: row.TITLE,
+                path: row.PATH
+              })
+            })
+          } else {
+            console.log(err)
+          }
+        }
+      )
     },
     submitTag() {
       const that = this
@@ -634,7 +746,8 @@ export default {
                   rows.forEach(row => {
                     that.docs.push({
                       id: row.ID,
-                      title: row.TITLE
+                      title: row.TITLE,
+                      path: row.PATH
                     })
                   })
                 } else {
@@ -849,7 +962,8 @@ export default {
                   rows.forEach(row => {
                     that.docs.push({
                       id: row.ID,
-                      title: row.TITLE
+                      title: row.TITLE,
+                      path: row.PATH
                     })
                   })
                 } else {
@@ -901,7 +1015,7 @@ export default {
   .tag
     overflow auto
   .el-tree-node
-    margin 4px
+    margin 2px
 .middle
   width 300px
   flex 0 0 300px
