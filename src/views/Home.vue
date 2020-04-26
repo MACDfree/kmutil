@@ -30,6 +30,7 @@
           :default-expand-all="true"
           ref="tagTree"
           @node-click="tagTreeNodeClick"
+          @node-contextmenu="tagTreeNodeMenu"
           height="100%"
           :highlight-current="true"
           icon-class="el-icon-arrow-right"
@@ -156,6 +157,13 @@
         <el-button type="primary" @click="submitDirectory">确 定</el-button>
       </span>
     </el-dialog>
+    <el-dialog title="修改标签名称" :visible.sync="showTagEdit" width="30%">
+      <el-input v-model="newTagName" placeholder="请输入标签名称"></el-input>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="showTagEdit = false;newTagName=''">取 消</el-button>
+        <el-button type="primary" @click="submitTag">确 定</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -238,6 +246,9 @@ export default {
       newDirectoryName: '',
       currentDirectoryId: null,
       isAddChild: false,
+      currentTagId: null,
+      showTagEdit: false,
+      newTagName: '',
       types: [
         {
           value: 'md',
@@ -304,6 +315,7 @@ export default {
         if (!err) {
           that.tags.push({
             label: '标签',
+            id: 0,
             children: rows.map(row => {
               return { label: row.NAME, id: row.ID }
             })
@@ -428,30 +440,94 @@ export default {
                                     deleteFile(row.PATH)
                                   }
                                 })
+                                deleteIds.forEach(id => {
+                                  that.$refs.directoryTree.remove(id)
+                                })
                                 db.run('COMMIT')
+                                that.$message({
+                                  type: 'success',
+                                  message: '删除成功'
+                                })
                               } catch (err) {
                                 console.log(err)
                                 db.run('ROLLBACK')
+                                that.$message({
+                                  type: 'error',
+                                  message: '删除失败'
+                                })
                               }
                             })
                           } else {
                             console.log(err)
+                            that.$message({
+                              type: 'error',
+                              message: '删除失败'
+                            })
                           }
                         }
                       )
                     } else {
                       console.log(err)
+                      that.$message({
+                        type: 'error',
+                        message: '删除失败'
+                      })
                     }
-                  })
-                  that.$message({
-                    type: 'success',
-                    message: '删除成功'
                   })
                 })
             }
           })
         )
       }
+      menu.popup(remote.getCurrentWindow())
+    },
+    tagTreeNodeMenu(event, nodeData) {
+      if (nodeData.id === 0) {
+        return
+      }
+
+      const Menu = remote.Menu
+      const MenuItem = remote.MenuItem
+      const menu = new Menu()
+      const that = this
+      menu.append(
+        new MenuItem({
+          label: '修改标签',
+          click: function() {
+            that.currentTagId = nodeData.id
+            that.newTagName = nodeData.label
+            that.showTagEdit = true
+          }
+        })
+      )
+      menu.append(
+        new MenuItem({
+          label: '删除标签',
+          click: function() {
+            // 删除标签，需要同步删除关联表
+            db.serialize(function() {
+              db.run('BEGIN')
+              try {
+                db.run('DELETE FROM KM_DOC_TAG WHERE TAG_ID=?', [nodeData.id])
+                db.run('DELETE FROM KM_TAG WHERE ID=?', [nodeData.id])
+                that.$refs.tagTree.remove(nodeData.id)
+                db.run('COMMIT')
+                that.$message({
+                  type: 'success',
+                  message: '删除成功'
+                })
+              } catch (err) {
+                console.log(err)
+                db.run('ROLLBACK')
+                that.$message({
+                  type: 'error',
+                  message: '删除失败'
+                })
+              }
+            })
+          }
+        })
+      )
       menu.popup(remote.getCurrentWindow())
     },
     submitDirectory() {
@@ -499,7 +575,29 @@ export default {
         )
       }
     },
-    tagTreeNodeClick() {},
+    tagTreeNodeClick(nodeData) {
+      // 联动显示
+    },
+    submitTag() {
+      const that = this
+      db.run(
+        'UPDATE KM_TAG SET UPDATE_TIME=$updateTime,NAME=$name WHERE ID=$id',
+        {
+          $updateTime: Math.floor(Date.now() / 1000),
+          $name: this.newTagName,
+          $id: this.currentTagId
+        },
+        function(err) {
+          if (!err) {
+            that.showTagEdit = false
+            that.$refs.tagTree.getNode(that.currentTagId).data.label =
+              that.newTagName
+          } else {
+            console.log(err)
+          }
+        }
+      )
+    },
     newDoc() {
       const that = this
       let path = ''
