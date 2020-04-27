@@ -312,7 +312,10 @@ export default {
         console.log(err)
       }
     })
-      .all('select * from km_tag order by create_time', function(err, rows) {
+      .all('select * from km_tag order by create_time desc', function(
+        err,
+        rows
+      ) {
         if (!err) {
           that.tags.push({
             label: '标签',
@@ -891,6 +894,22 @@ export default {
                   )
                   that.docTags.push({ name: inputValue })
                   db.run('COMMIT')
+                  db.all(
+                    'select * from km_tag order by create_time desc',
+                    function(err, rows) {
+                      if (!err) {
+                        that.tags.push({
+                          label: '标签',
+                          id: 0,
+                          children: rows.map(row => {
+                            return { label: row.NAME, id: row.ID }
+                          })
+                        })
+                      } else {
+                        console.log(err)
+                      }
+                    }
+                  )
                 } catch (err2) {
                   console.log(err2)
                   db.run('ROLLBACK')
