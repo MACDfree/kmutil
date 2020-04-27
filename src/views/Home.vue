@@ -898,6 +898,7 @@ export default {
                     'select * from km_tag order by create_time desc',
                     function(err, rows) {
                       if (!err) {
+                        that.tags.splice(0, that.tags.length)
                         that.tags.push({
                           label: '标签',
                           id: 0,
