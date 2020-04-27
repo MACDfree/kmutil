@@ -1,6 +1,6 @@
 'use strict'
 
-import { app, protocol, BrowserWindow, Menu, dialog } from 'electron'
+import { app, protocol, BrowserWindow, Menu, dialog, ipcMain } from 'electron'
 import {
   createProtocol
   /* installVueDevtools */
@@ -8,13 +8,16 @@ import {
 
 import Store from 'electron-store'
 
+import { autoUpdater } from 'electron-updater'
+
 const isDevelopment = process.env.NODE_ENV !== 'production'
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let win
 
-const store = new Store();
+const store = new Store()
+app.setAppUserModelId('kmutil')
 
 // Scheme must be registered before the app is ready
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { secure: true, standard: true } }])
@@ -124,6 +127,10 @@ function createMenu() {
           click: openRepo
         },
         {
+          label: '检查更新',
+          click: updateHandle
+        },
+        {
           label: '退出',
           role: 'quit'
         }
@@ -166,4 +173,54 @@ function openRepo() {
       win.reload()
     }
   })
+}
+
+ipcMain.on('checkForUpdate', e =>
+  updateHandle()
+)
+
+function updateHandle() {
+  autoUpdater.checkForUpdates()
+  const message = {
+    error: '检查更新出错',
+    checking: '正在检查更新……',
+    updateAva: '检测到新版本，正在下载……',
+    updateNotAva: '现在使用的就是最新版本，不用更新'
+  }
+  autoUpdater.setFeedURL('http://127.0.0.1/exe')
+  autoUpdater.on('error', function (error) {
+    sendUpdateError(JSON.stringify(error))
+    sendUpdateMessage(message.error)
+  })
+  autoUpdater.on('checking-for-update', function () {
+    sendUpdateMessage(message.checking)
+  })
+  autoUpdater.on('update-available', function (info) {
+    console.log(info)
+    sendUpdateMessage(message.updateAva)
+  })
+  autoUpdater.on('update-not-available', function (info) {
+    console.log(info)
+    sendUpdateMessage(message.updateNotAva)
+  })
+
+  // 更新下载进度事件
+  autoUpdater.on('download-progress', function (progressObj) {
+    console.log(progressObj.percent)
+    win.webContents.send('downloadProgress', progressObj)
+  })
+  autoUpdater.on('update-downloaded', function (event, releaseNotes, releaseName, releaseDate, updateUrl, quitAndUpdate) {
+    ipcMain.on('isUpdateNow', (e, arg) => {
+      console.log(arg)
+      console.log('开始更新')
+      // some code here to handle event
+      autoUpdater.quitAndInstall()
+    })
+
+    win.webContents.send('isUpdateNow')
+  })
+}
+
+function sendUpdateMessage(text) {
+  win.webContents.send('message', text)
 }

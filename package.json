@@ -1,6 +1,9 @@
 {
   "name": "kmutil",
   "version": "0.1.0",
+  "appId": "me.macd.kmutil",
+  "author": "macd",
+  "description": "knowledge manager",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -33,6 +36,7 @@
     "@vue/eslint-config-standard": "^5.1.2",
     "babel-eslint": "^10.1.0",
     "electron": "^8.2.0",
+    "electron-updater": "^4.2.5",
     "eslint": "^6.7.2",
     "eslint-plugin-import": "^2.20.2",
     "eslint-plugin-node": "^11.1.0",
