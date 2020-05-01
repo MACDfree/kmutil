@@ -134,14 +134,21 @@
 // import HelloWorld from '@/components/HelloWorld.vue'
 // import sq3 from 'sqlite3'
 import db from '../utils/sql-util'
-import { deleteFile } from '../utils/file-util'
 import { exec } from 'child_process'
 import global from '../utils/global'
 import EditArea from '../components/EditArea'
 import NewDoc from '../components/NewDoc'
 import 'element-tiptap/lib/index.css'
 import { remote } from 'electron'
-import { listDirectory, listTag, listDoc, deleteDirectory } from '../api/db'
+import {
+  listDirectory,
+  listTag,
+  listDoc,
+  deleteDirectory,
+  deleteTag,
+  deleteDoc,
+  addDocTag
+} from '../api/db'
 import { findChildren } from '../utils/comm-func'
 
 export default {
@@ -345,29 +352,21 @@ export default {
                 type: 'warning'
               })
               .then(() => {
-                // 删除标签，需要同步删除关联表
-                db.serialize(function() {
-                  db.run('BEGIN')
-                  try {
-                    db.run('DELETE FROM KM_DOC_TAG WHERE TAG_ID=?', [
-                      nodeData.id
-                    ])
-                    db.run('DELETE FROM KM_TAG WHERE ID=?', [nodeData.id])
-                    that.$refs.tagTree.remove(nodeData.id)
-                    db.run('COMMIT')
+                deleteTag(nodeData.id)
+                  .then(tagId => {
+                    that.$refs.tagTree.remove(tagId)
                     that.$message({
                       type: 'success',
                       message: '删除成功'
                     })
-                  } catch (err) {
+                  })
+                  .catch(err => {
                     console.log(err)
-                    db.run('ROLLBACK')
                     that.$message({
                       type: 'error',
                       message: '删除失败'
                     })
-                  }
-                })
+                  })
               })
           }
         })
@@ -390,15 +389,8 @@ export default {
                 type: 'warning'
               })
               .then(() => {
-                db.serialize(function() {
-                  db.run('BEGIN')
-                  try {
-                    db.run('delete from km_document where id=?', doc.id)
-                    // 删除实体文件
-                    if (doc.path) {
-                      deleteFile(doc.path)
-                    }
-                    db.run('COMMIT')
+                deleteDoc(doc)
+                  .then(() => {
                     that.docs.splice(
                       that.docs.findIndex(item => item.id === doc.id),
                       1
@@ -407,15 +399,14 @@ export default {
                       type: 'success',
                       message: '删除成功'
                     })
-                  } catch (err) {
+                  })
+                  .catch(err => {
                     console.log(err)
-                    db.run('ROLLBACK')
                     that.$message({
                       type: 'error',
                       message: '删除失败'
                     })
-                  }
-                })
+                  })
               })
           }
         })
@@ -613,59 +604,24 @@ export default {
         }
         const that = this
         // 判断标签是否存在
-        db.get(
-          'SELECT COUNT(*) a FROM KM_TAG WHERE NAME=?',
-          [inputValue],
-          function(err, row) {
-            if (!err) {
-              db.serialize(function() {
-                db.run('BEGIN')
-                try {
-                  if (row.a === 0) {
-                    db.run(
-                      'INSERT INTO KM_TAG (CREATE_TIME,UPDATE_TIME,NAME) VALUES ($createTime,$updateTime,$name)',
-                      {
-                        $createTime: Math.floor(Date.now() / 1000),
-                        $updateTime: Math.floor(Date.now() / 1000),
-                        $name: inputValue
-                      }
-                    )
-                  }
-                  db.run(
-                    'INSERT INTO KM_DOC_TAG (DOC_ID,TAG_ID) SELECT ' +
-                      that.currentDocId +
-                      ' DOC_ID, ID TAG_ID FROM KM_TAG WHERE NAME=?',
-                    [inputValue]
-                  )
-                  that.docTags.push({ name: inputValue })
-                  db.run('COMMIT')
-                  db.all(
-                    'select * from km_tag order by create_time desc',
-                    function(err, rows) {
-                      if (!err) {
-                        that.tags.splice(0, that.tags.length)
-                        that.tags.push({
-                          label: '标签',
-                          id: 0,
-                          children: rows.map(row => {
-                            return { label: row.NAME, id: row.ID }
-                          })
-                        })
-                      } else {
-                        console.log(err)
-                      }
-                    }
-                  )
-                } catch (err2) {
-                  console.log(err2)
-                  db.run('ROLLBACK')
-                }
+        addDocTag(inputValue, this.currentDocId)
+          .then(() => {
+            that.docTags.push({ name: inputValue })
+            return listTag()
+          })
+          .then(rows => {
+            that.tags.splice(0, that.tags.length)
+            that.tags.push({
+              label: '标签',
+              id: 0,
+              children: rows.map(row => {
+                return { label: row.NAME, id: row.ID }
               })
-            } else {
-              console.log(err)
-            }
-          }
-        )
+            })
+          })
+          .catch(err => {
+            console.log(err)
+          })
       }
       this.inputVisible = false
       this.inputValue = ''

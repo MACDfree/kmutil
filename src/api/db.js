@@ -141,3 +141,84 @@ export function deleteDirectory(directoryId) {
     })
   })
 }
+
+export function deleteTag(tagId) {
+  return new Promise((resolve, reject) => {
+    // 删除标签，需要同步删除关联表
+    sql.serialize(function () {
+      sql.run('BEGIN')
+      try {
+        sql.run('DELETE FROM KM_DOC_TAG WHERE TAG_ID=?', [
+          tagId
+        ])
+        sql.run('DELETE FROM KM_TAG WHERE ID=?', [tagId])
+        sql.run('COMMIT')
+        resolve(tagId)
+      } catch (err) {
+        sql.run('ROLLBACK')
+        reject(err)
+      }
+    })
+  })
+}
+
+export function deleteDoc(doc) {
+  return new Promise((resolve, reject) => {
+    sql.serialize(function () {
+      sql.run('BEGIN')
+      try {
+        sql.run('delete from km_document where id=?', doc.id)
+        // 删除实体文件
+        if (doc.path) {
+          deleteFile(doc.path)
+        }
+        sql.run('COMMIT')
+        resolve()
+      } catch (err) {
+        sql.run('ROLLBACK')
+        reject(err)
+      }
+    })
+  })
+}
+
+export function addDocTag(tagName, docId) {
+  return new Promise((resolve, reject) => {
+    sql.get(
+      'SELECT COUNT(*) a FROM KM_TAG WHERE NAME=?',
+      [tagName],
+      function (err, row) {
+        if (!err) {
+          sql.serialize(function () {
+            sql.run('BEGIN')
+            try {
+              if (row.a === 0) {
+                sql.run(
+                  'INSERT INTO KM_TAG (CREATE_TIME,UPDATE_TIME,NAME) VALUES ($createTime,$updateTime,$name)',
+                  {
+                    $createTime: Math.floor(Date.now() / 1000),
+                    $updateTime: Math.floor(Date.now() / 1000),
+                    $name: tagName
+                  }
+                )
+              }
+              sql.run(
+                'INSERT INTO KM_DOC_TAG (DOC_ID,TAG_ID) SELECT ' +
+                docId +
+                ' DOC_ID, ID TAG_ID FROM KM_TAG WHERE NAME=?',
+                [tagName]
+              )
+              sql.run('COMMIT')
+              resolve()
+            } catch (err2) {
+              sql.run('ROLLBACK')
+              reject(err2)
+            }
+          })
+        } else {
+          reject(err)
+        }
+      }
+    )
+  })
+}
