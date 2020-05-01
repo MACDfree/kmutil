@@ -151,13 +151,10 @@ function newRepo() {
   }).then(function (ret) {
     if (!ret.canceled) {
       const currentPath = ret.filePaths[0]
-      // 判断此路径下是否有info.db文件，如果没有则初始化库
-      if (!fs.existsSync(currentPath + '\\info.db')) {
-        //
-      }
       global.sharedObject = {
-        currentPaht: currentPath
+        currentPath: currentPath
       }
+      win.webContents.send('init', currentPath)
     }
   })
 }
@@ -180,6 +177,11 @@ function openRepo() {
     }
   })
 }
+
+// 刷新页面指令
+ipcMain.on('reload', e => {
+  win.reload()
+})
 
 ipcMain.on('checkForUpdate', e =>
   updateHandle()

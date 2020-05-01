@@ -126,18 +126,18 @@
         <el-button type="primary" @click="submitTag">确 定</el-button>
       </span>
     </el-dialog>
+    <Init @init-finish="initData"></Init>
   </div>
 </template>
 
 <script>
 // @ is an alias to /src
-// import HelloWorld from '@/components/HelloWorld.vue'
-// import sq3 from 'sqlite3'
-import db from '../utils/sql-util'
+import { DataBase } from '../utils/sql-util'
 import { exec } from 'child_process'
 import global from '../utils/global'
 import EditArea from '../components/EditArea'
 import NewDoc from '../components/NewDoc'
+import Init from '../components/Init'
 import 'element-tiptap/lib/index.css'
 import { remote } from 'electron'
 import {
@@ -198,43 +198,81 @@ export default {
   },
   components: {
     EditArea,
-    NewDoc
+    NewDoc,
+    Init
   },
   mounted() {
-    const that = this
-    listDirectory()
-      .then(rows => {
-        that.directorys.push({
-          label: '文件夹',
-          id: 0,
-          children: findChildren(0, rows)
-        })
-        return listTag()
-      })
-      .then(rows => {
-        that.tags.push({
-          label: '标签',
-          id: 0,
-          children: rows.map(row => {
-            return { label: row.NAME, id: row.ID }
-          })
-        })
-        return listDoc()
-      })
-      .then(obj => {
-        obj.rows.forEach(row => {
-          that.docs.push({
-            id: row.ID,
-            title: row.TITLE,
-            path: row.PATH
-          })
-        })
-      })
-      .catch(err => {
-        console.log(err)
-      })
+    // const that = this
+    // listDirectory()
+    //   .then(rows => {
+    //     that.directorys.push({
+    //       label: '文件夹',
+    //       id: 0,
+    //       children: findChildren(0, rows)
+    //     })
+    //     return listTag()
+    //   })
+    //   .then(rows => {
+    //     that.tags.push({
+    //       label: '标签',
+    //       id: 0,
+    //       children: rows.map(row => {
+    //         return { label: row.NAME, id: row.ID }
+    //       })
+    //     })
+    //     return listDoc()
+    //   })
+    //   .then(obj => {
+    //     obj.rows.forEach(row => {
+    //       that.docs.push({
+    //         id: row.ID,
+    //         title: row.TITLE,
+    //         path: row.PATH
+    //       })
+    //     })
+    //   })
+    //   .catch(err => {
+    //     console.log(err)
+    //   })
   },
   methods: {
+    initData() {
+      const that = this
+      listDirectory()
+        .then(rows => {
+          that.directorys.splice(0, that.directorys.length)
+          that.directorys.push({
+            label: '文件夹',
+            id: 0,
+            children: findChildren(0, rows)
+          })
+          return listTag()
+        })
+        .then(rows => {
+          that.tags.splice(0, that.tags.length)
+          that.tags.push({
+            label: '标签',
+            id: 0,
+            children: rows.map(row => {
+              return { label: row.NAME, id: row.ID }
+            })
+          })
+          return listDoc()
+        })
+        .then(obj => {
+          obj.rows.forEach(row => {
+            that.docs.splice(0, that.docs.length)
+            that.docs.push({
+              id: row.ID,
+              title: row.TITLE,
+              path: row.PATH
+            })
+          })
+        })
+        .catch(err => {
+          console.log(err)
+        })
+    },
     treeNodeClick(nodeData) {
       this.currentDirectoryId = nodeData.id
       this.$refs.tagTree.setCurrentKey(null)
@@ -415,126 +453,155 @@ export default {
     },
     submitDirectory() {
       const that = this
+      const dataBase = new DataBase()
       if (this.isAddChild) {
-        db.run(
-          'INSERT INTO KM_DIRECTORY (CREATE_TIME,UPDATE_TIME,NAME,PARENT) VALUES ($createTime,$updateTime,$name,$parent)',
-          {
-            $createTime: Math.floor(Date.now() / 1000),
-            $updateTime: Math.floor(Date.now() / 1000),
-            $name: this.newDirectoryName,
-            $parent: this.menucurrentDirectoryId
-          },
-          function(err) {
-            if (!err) {
-              console.log(this)
-              that.showDirectoryEdit = false
-              that.$refs.directoryTree.append(
-                { label: that.newDirectoryName, id: this.lastID },
-                that.menucurrentDirectoryId
-              )
-            } else {
-              console.log(err)
-            }
-          }
-        )
+        dataBase
+          .open()
+          .then(() => {
+            return dataBase.run(
+              'INSERT INTO KM_DIRECTORY (CREATE_TIME,UPDATE_TIME,NAME,PARENT) VALUES ($createTime,$updateTime,$name,$parent)',
+              {
+                $createTime: Math.floor(Date.now() / 1000),
+                $updateTime: Math.floor(Date.now() / 1000),
+                $name: that.newDirectoryName,
+                $parent: that.menucurrentDirectoryId
+              }
+            )
+          })
+          .then(() => {
+            that.showDirectoryEdit = false
+            that.$refs.directoryTree.append(
+              { label: that.newDirectoryName, id: this.lastID },
+              that.menucurrentDirectoryId
+            )
+          })
+          .catch(err => {
+            console.log(err)
+          })
+          .finally(() => {
+            dataBase.close()
+          })
       } else {
-        db.run(
-          'UPDATE KM_DIRECTORY SET UPDATE_TIME=$updateTime,NAME=$name WHERE ID=$id',
-          {
-            $updateTime: Math.floor(Date.now() / 1000),
-            $name: this.newDirectoryName,
-            $id: this.menucurrentDirectoryId
-          },
-          function(err) {
-            if (!err) {
-              that.showDirectoryEdit = false
-              that.$refs.directoryTree.getNode(
-                that.menucurrentDirectoryId
-              ).data.label = that.newDirectoryName
-            } else {
-              console.log(err)
-            }
-          }
-        )
+        dataBase
+          .open()
+          .then(() => {
+            return dataBase.run(
+              'UPDATE KM_DIRECTORY SET UPDATE_TIME=$updateTime,NAME=$name WHERE ID=$id',
+              {
+                $updateTime: Math.floor(Date.now() / 1000),
+                $name: that.newDirectoryName,
+                $id: that.menucurrentDirectoryId
+              }
+            )
+          })
+          .then(() => {
+            that.showDirectoryEdit = false
+            that.$refs.directoryTree.getNode(
+              that.menucurrentDirectoryId
+            ).data.label = that.newDirectoryName
+          })
+          .catch(err => {
+            console.log(err)
+          })
+          .finally(() => {
+            dataBase.close()
+          })
       }
     },
     tagTreeNodeClick(nodeData) {
       this.$refs.directoryTree.setCurrentKey(null)
       const that = this
       const tagId = nodeData.id
-      db.all(
-        'SELECT a.* FROM KM_DOCUMENT a INNER JOIN KM_DOC_TAG b ON a.ID=b.DOC_ID WHERE b.TAG_ID=? ORDER BY a.CREATE_TIME DESC',
-        [tagId],
-        function(err, rows) {
-          if (!err) {
-            that.docs.splice(0, that.docs.length)
-            rows.forEach(row => {
-              that.docs.push({
-                id: row.ID,
-                title: row.TITLE,
-                path: row.PATH
-              })
+      const dataBase = new DataBase()
+      dataBase
+        .open()
+        .then(() => {
+          return dataBase.all(
+            'SELECT a.* FROM KM_DOCUMENT a INNER JOIN KM_DOC_TAG b ON a.ID=b.DOC_ID WHERE b.TAG_ID=? ORDER BY a.CREATE_TIME DESC',
+            [tagId]
+          )
+        })
+        .then(rows => {
+          that.docs.splice(0, that.docs.length)
+          rows.forEach(row => {
+            that.docs.push({
+              id: row.ID,
+              title: row.TITLE,
+              path: row.PATH
             })
-          } else {
-            console.log(err)
-          }
-        }
-      )
+          })
+        })
+        .catch(err => {
+          console.log(err)
+        })
+        .finally(() => {
+          dataBase.close()
+        })
     },
     submitTag() {
       const that = this
-      db.run(
-        'UPDATE KM_TAG SET UPDATE_TIME=$updateTime,NAME=$name WHERE ID=$id',
-        {
-          $updateTime: Math.floor(Date.now() / 1000),
-          $name: this.newTagName,
-          $id: this.currentTagId
-        },
-        function(err) {
-          if (!err) {
-            that.showTagEdit = false
-            that.$refs.tagTree.getNode(that.currentTagId).data.label =
-              that.newTagName
-          } else {
-            console.log(err)
-          }
-        }
-      )
+      const dataBase = new DataBase()
+      dataBase
+        .open()
+        .then(() => {
+          return dataBase.run(
+            'UPDATE KM_TAG SET UPDATE_TIME=$updateTime,NAME=$name WHERE ID=$id',
+            {
+              $updateTime: Math.floor(Date.now() / 1000),
+              $name: that.newTagName,
+              $id: that.currentTagId
+            }
+          )
+        })
+        .then(() => {
+          that.showTagEdit = false
+          that.$refs.tagTree.getNode(that.currentTagId).data.label =
+            that.newTagName
+        })
+        .catch(err => {
+          console.log(err)
+        })
+        .finally(() => {
+          dataBase.close()
+        })
     },
     showDoc(docId) {
       this.currentDocId = docId
       const that = this
-      db.get(
-        'select * from km_document where id=? order by id desc',
-        [docId],
-        function(err, row) {
-          if (!err && row) {
-            that.content = row.CONTENT
-            that.title = row.TITLE
-            that.docType = row.TYPE
-            // 获取文档的标签
-            db.all(
-              'select a.* from KM_TAG a INNER JOIN KM_DOC_TAG b ON a.ID=b.TAG_ID WHERE b.DOC_ID=? order by a.ID desc',
-              [docId],
-              function(err, rows) {
-                that.docTags.splice(0, that.docTags.length)
-                if (!err) {
-                  rows.forEach(row => {
-                    that.docTags.push({
-                      id: row.ID,
-                      name: row.NAME
-                    })
-                  })
-                } else {
-                  console.log(err)
-                }
-              }
-            )
-          } else {
-            console.log(err)
-          }
-        }
-      )
+      const dataBase = new DataBase()
+      dataBase
+        .open()
+        .then(() => {
+          return dataBase.get(
+            'select * from km_document where id=? order by id desc',
+            [docId]
+          )
+        })
+        .then(row => {
+          that.content = row.CONTENT
+          that.title = row.TITLE
+          that.docType = row.TYPE
+          // 获取文档的标签
+          return dataBase.all(
+            'select a.* from KM_TAG a INNER JOIN KM_DOC_TAG b ON a.ID=b.TAG_ID WHERE b.DOC_ID=? order by a.ID desc',
+            [docId]
+          )
+        })
+        .then(rows => {
+          that.docTags.splice(0, that.docTags.length)
+          rows.forEach(row => {
+            that.docTags.push({
+              id: row.ID,
+              name: row.NAME
+            })
+          })
+        })
+        .catch(err => {
+          console.log(err)
+        })
+        .finally(() => {
+          dataBase.close()
+        })
     },
     saveDoc() {
       if (!this.currentDocId) {
@@ -543,47 +610,61 @@ export default {
       }
       if (this.editable) {
         const that = this
-        db.run(
-          'update km_document set title=$title,content=$content,update_time=$updateTime where id=$id',
-          {
-            $title: this.title,
-            $content: this.content,
-            $updateTime: Math.floor(Date.now() / 1000),
-            $id: this.currentDocId
-          },
-          function(err) {
-            if (!err) {
-              // 同步更新列表
-              const currentDoc = that.docs.find(
-                doc => doc.id === that.currentDocId
-              )
-              if (currentDoc) {
-                currentDoc.title = that.title
+        const dataBase = new DataBase()
+        dataBase
+          .open()
+          .then(() => {
+            return dataBase.run(
+              'update km_document set title=$title,content=$content,update_time=$updateTime where id=$id',
+              {
+                $title: this.title,
+                $content: this.content,
+                $updateTime: Math.floor(Date.now() / 1000),
+                $id: this.currentDocId
               }
-            } else {
-              console.log(err)
+            )
+          })
+          .then(() => {
+            // 同步更新列表
+            const currentDoc = that.docs.find(
+              doc => doc.id === that.currentDocId
+            )
+            if (currentDoc) {
+              currentDoc.title = that.title
             }
-          }
-        )
+          })
+          .catch(err => {
+            console.log(err)
+          })
+          .finally(() => {
+            dataBase.close()
+          })
       }
       this.editable = !this.editable
     },
     deleteDocTag(tag) {
       const that = this
-      db.run(
-        'DELETE FROM KM_DOC_TAG WHERE DOC_ID=? AND TAG_ID IN (SELECT ID FROM KM_TAG WHERE NAME=?)',
-        [this.currentDocId, tag.name],
-        function(err) {
-          if (!err) {
-            that.docTags.splice(
-              that.docTags.findIndex(item => item.name === tag.name),
-              1
-            )
-          } else {
-            console.log(err)
-          }
-        }
-      )
+      const dataBase = new DataBase()
+      dataBase
+        .open()
+        .then(() => {
+          return dataBase.run(
+            'DELETE FROM KM_DOC_TAG WHERE DOC_ID=? AND TAG_ID IN (SELECT ID FROM KM_TAG WHERE NAME=?)',
+            [this.currentDocId, tag.name]
+          )
+        })
+        .then(() => {
+          that.docTags.splice(
+            that.docTags.findIndex(item => item.name === tag.name),
+            1
+          )
+        })
+        .catch(err => {
+          console.log(err)
+        })
+        .finally(() => {
+          dataBase.close()
+        })
     },
     showInput() {
       this.inputVisible = true
@@ -627,34 +708,40 @@ export default {
       this.inputValue = ''
     },
     openFile() {
-      db.get(
-        'SELECT PATH,TYPE FROM KM_DOCUMENT WHERE ID=?',
-        [this.currentDocId],
-        function(err, row) {
-          if (!err) {
-            if (row.PATH) {
-              let cmd = ''
-              // 打开文件
-              if (row.TYPE === 'md') {
-                cmd = `D:\\Program\\Typora\\Typora.exe ${global.currentPath}\\attach\\${row.PATH}`
-              } else if (row.TYPE === 'mm') {
-                cmd = `"C:\\Program Files\\XMind\\XMind.exe" ${global.currentPath}\\attach\\${row.PATH}`
-              } else if (row.TYPE === 'doc') {
-                // TODO
-              }
-              if (cmd) {
-                exec(cmd, function(err, stdout, stderr) {
-                  if (err) {
-                    console.log(err)
-                  }
-                })
-              }
+      const dataBase = new DataBase()
+      dataBase
+        .open()
+        .then(() => {
+          return dataBase.get('SELECT PATH,TYPE FROM KM_DOCUMENT WHERE ID=?', [
+            this.currentDocId
+          ])
+        })
+        .then(row => {
+          if (row.PATH) {
+            let cmd = ''
+            // 打开文件
+            if (row.TYPE === 'md') {
+              cmd = `D:\\Program\\Typora\\Typora.exe ${global.currentPath}\\attach\\${row.PATH}`
+            } else if (row.TYPE === 'mm') {
+              cmd = `"C:\\Program Files\\XMind\\XMind.exe" ${global.currentPath}\\attach\\${row.PATH}`
+            } else if (row.TYPE === 'doc') {
+              // TODO
             }
-          } else {
-            console.log(err)
+            if (cmd) {
+              exec(cmd, function(err, stdout, stderr) {
+                if (err) {
+                  console.log(err)
+                }
+              })
+            }
           }
-        }
-      )
+        })
+        .catch(err => {
+          console.log(err)
+        })
+        .finally(() => {
+          dataBase.close()
+        })
     },
     refreshDocTree(rows) {
       const that = this

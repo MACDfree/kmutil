@@ -1,9 +1,10 @@
 import { remote } from 'electron'
 
-const sharedObject = remote.getGlobal('sharedObject')
+export default function global() {
+  const sharedObject = remote.getGlobal('sharedObject')
 
-if (!sharedObject) {
-  throw new Error('sharedObject is null')
+  if (!sharedObject) {
+    throw new Error('sharedObject is null')
+  }
+  return { currentPath: sharedObject.currentPath }
 }
-
-export default sharedObject
