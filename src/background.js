@@ -10,6 +10,8 @@ import Store from 'electron-store'
 
 import { autoUpdater } from 'electron-updater'
 
+import fs from 'fs'
+
 const isDevelopment = process.env.NODE_ENV !== 'production'
 
 // Keep a global reference of the window object, if you don't, the window will
@@ -148,9 +150,13 @@ function newRepo() {
     ]
   }).then(function (ret) {
     if (!ret.canceled) {
-      const currentPaht = ret.filePaths[0]
+      const currentPath = ret.filePaths[0]
+      // 判断此路径下是否有info.db文件，如果没有则初始化库
+      if (!fs.existsSync(currentPath + '\\info.db')) {
+        //
+      }
       global.sharedObject = {
-        currentPaht: currentPaht
+        currentPaht: currentPath
       }
     }
   })

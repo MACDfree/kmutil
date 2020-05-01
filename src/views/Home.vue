@@ -6,7 +6,7 @@
           :indent="10"
           :data="directorys"
           :expand-on-click-node="false"
-          :node-key="'id'"
+          node-key="id"
           :default-expand-all="true"
           ref="directoryTree"
           @node-click="treeNodeClick"
@@ -50,22 +50,11 @@
           prefix-icon="el-icon-search"
           v-model="searchStr"
         ></el-input>
-        <el-popover placement="top" width="160" v-model="newDocVisible">
-          <p>文档类型</p>
-          <el-select v-model="newDocType" placeholder="请选择" size="mini">
-            <el-option
-              v-for="type in types"
-              :key="type.value"
-              :label="type.label"
-              :value="type.value"
-            ></el-option>
-          </el-select>
-          <div style="text-align: right; margin: 0">
-            <el-button size="mini" type="text" @click="newDocVisible = false">取消</el-button>
-            <el-button type="primary" size="mini" @click="newDoc()">确定</el-button>
-          </div>
-          <el-button slot="reference" size="mini" icon="el-icon-document-add"></el-button>
-        </el-popover>
+        <NewDoc
+          :default-doc-type="'text'"
+          :directory-id="currentDirectoryId"
+          @refresh-doc="refreshDocTree"
+        ></NewDoc>
       </div>
       <div class="list">
         <ul>
@@ -121,36 +110,8 @@
         </el-popover>
         <el-button size="mini" v-if="showOpenFile" @click="openFile">打开文件</el-button>
       </div>
-      <el-tiptap
-        v-model="content"
-        :extensions="extensions"
-        :readonly="!editable"
-        height="100%"
-        :class="{readonly: !editable}"
-      ></el-tiptap>
+      <EditArea v-model="content" :editable="editable"></EditArea>
     </div>
-    <el-dialog title="导入文档" :visible.sync="showUploader" width="100%">
-      <el-upload
-        action="empty"
-        class="upload-demo"
-        drag
-        :accept="allowType"
-        :auto-upload="false"
-        :http-request="upload"
-        ref="uploader"
-      >
-        <i class="el-icon-upload"></i>
-        <div class="el-upload__text">
-          将文件拖到此处，或
-          <em>点击上传</em>
-        </div>
-        <div class="el-upload__tip" slot="tip">只能上传{{ allowType }}文件，且不超过500kb</div>
-      </el-upload>
-      <span slot="footer" class="dialog-footer">
-        <el-button @click="showUploader = false">取 消</el-button>
-        <el-button type="primary" @click="submitUpload">确 定</el-button>
-      </span>
-    </el-dialog>
     <el-dialog title="修改文件夹名称" :visible.sync="showDirectoryEdit" width="30%">
       <el-input v-model="newDirectoryName" placeholder="请输入文件夹名称"></el-input>
       <span slot="footer" class="dialog-footer">
@@ -173,57 +134,15 @@
 // import HelloWorld from '@/components/HelloWorld.vue'
 // import sq3 from 'sqlite3'
 import db from '../utils/sql-util'
-import { createMDFile, copyFile, deleteFile } from '../utils/file-util'
+import { deleteFile } from '../utils/file-util'
 import { exec } from 'child_process'
 import global from '../utils/global'
-import {
-  ElementTiptap, // 需要的 extensions
-  Doc,
-  Text,
-  Paragraph,
-  Heading,
-  Bold,
-  Underline,
-  Italic,
-  Strike,
-  ListItem,
-  BulletList,
-  OrderedList,
-  TodoItem,
-  TodoList,
-  Table,
-  TableHeader,
-  TableCell,
-  TableRow,
-  FormatClear,
-  History
-} from 'element-tiptap'
-// import element-tiptap 样式
+import EditArea from '../components/EditArea'
+import NewDoc from '../components/NewDoc'
 import 'element-tiptap/lib/index.css'
 import { remote } from 'electron'
-
-function findChildren(parent, list) {
-  const nodes = []
-  list.forEach(row => {
-    if (row.PARENT === parent) {
-      nodes.push({
-        label: row.NAME,
-        id: row.ID,
-        children: findChildren(row.ID, list)
-      })
-    }
-  })
-  return nodes
-}
-
-function findChildIds(list, pid, deleteIds) {
-  list.forEach(row => {
-    if (row.PARENT === pid) {
-      deleteIds.push(row.ID)
-      findChildIds(list, row.ID, deleteIds)
-    }
-  })
-}
+import { listDirectory, listTag, listDoc, deleteDirectory } from '../api/db'
+import { findChildren } from '../utils/comm-func'
 
 export default {
   name: 'Home',
@@ -238,14 +157,12 @@ export default {
       title: '',
       editable: false,
       visible: false,
-      newDocVisible: false,
-      newDocType: 'text',
       docTags: [],
       docType: 'text',
-      showUploader: false,
       showDirectoryEdit: false,
       newDirectoryName: '',
-      currentDirectoryId: null,
+      currentDirectoryId: 0,
+      menucurrentDirectoryId: null,
       isAddChild: false,
       currentTagId: null,
       showTagEdit: false,
@@ -269,135 +186,67 @@ export default {
         }
       ],
       inputVisible: false,
-      inputValue: '',
-      extensions: [
-        new Doc(),
-        new Text(),
-        new Paragraph(),
-        new Heading({ level: 3 }),
-        new Bold(), // 在气泡菜单中渲染菜单按钮 { bubble: true }
-        new Underline(),
-        new Italic(),
-        new Strike(),
-        new ListItem(),
-        new BulletList(),
-        new OrderedList(),
-        new TodoItem(),
-        new TodoList(),
-        new Table(),
-        new TableHeader(),
-        new TableCell(),
-        new TableRow(),
-        new FormatClear(),
-        new History()
-      ]
+      inputValue: ''
     }
   },
   components: {
-    'el-tiptap': ElementTiptap
+    EditArea,
+    NewDoc
   },
   mounted() {
     const that = this
-    db.all('select * from km_directory order by create_time', function(
-      err,
-      rows
-    ) {
-      if (!err) {
+    listDirectory()
+      .then(rows => {
         that.directorys.push({
           label: '文件夹',
           id: 0,
           children: findChildren(0, rows)
         })
-      } else {
-        console.log(err)
-      }
-    })
-      .all('select * from km_tag order by create_time desc', function(
-        err,
-        rows
-      ) {
-        if (!err) {
-          that.tags.push({
-            label: '标签',
-            id: 0,
-            children: rows.map(row => {
-              return { label: row.NAME, id: row.ID }
-            })
-          })
-        } else {
-          console.log(err)
-        }
+        return listTag()
       })
-      .all('select * from km_document order by create_time desc', function(
-        err,
-        rows
-      ) {
-        if (!err) {
-          rows.forEach(row => {
+      .then(rows => {
+        that.tags.push({
+          label: '标签',
+          id: 0,
+          children: rows.map(row => {
+            return { label: row.NAME, id: row.ID }
+          })
+        })
+        return listDoc()
+      })
+      .then(obj => {
+        obj.rows.forEach(row => {
+          that.docs.push({
+            id: row.ID,
+            title: row.TITLE,
+            path: row.PATH
+          })
+        })
+      })
+      .catch(err => {
+        console.log(err)
+      })
+  },
+  methods: {
+    treeNodeClick(nodeData) {
+      this.currentDirectoryId = nodeData.id
+      this.$refs.tagTree.setCurrentKey(null)
+      const that = this
+      const directoryId = nodeData.id
+      listDoc(directoryId)
+        .then(obj => {
+          that.docs.splice(0, that.docs.length)
+          obj.rows.forEach(row => {
             that.docs.push({
               id: row.ID,
               title: row.TITLE,
               path: row.PATH
             })
           })
-        } else {
+        })
+        .catch(err => {
           console.log(err)
-        }
-      })
-  },
-  methods: {
-    treeNodeClick(nodeData) {
-      this.$refs.tagTree.setCurrentKey(null)
-      const that = this
-      const directoryId = nodeData.id
-      if (directoryId === 0) {
-        db.all('select * from km_document order by create_time desc', function(
-          err,
-          rows
-        ) {
-          if (!err) {
-            that.docs.splice(0, that.docs.length)
-            rows.forEach(row => {
-              that.docs.push({
-                id: row.ID,
-                title: row.TITLE,
-                path: row.PATH
-              })
-            })
-          } else {
-            console.log(err)
-          }
         })
-      } else {
-        db.all('select * from km_directory', function(err, rows) {
-          if (!err) {
-            const ids = [directoryId]
-            findChildIds(rows, directoryId, ids)
-            db.all(
-              'select * from km_document where directory_id in (' +
-                ids.map(_ => '?') +
-                ') order by create_time desc',
-              ids,
-              function(err, rows) {
-                if (!err) {
-                  that.docs.splice(0, that.docs.length)
-                  rows.forEach(row => {
-                    that.docs.push({
-                      id: row.ID,
-                      title: row.TITLE,
-                      path: row.PATH
-                    })
-                  })
-                } else {
-                  console.log(err)
-                }
-              }
-            )
-          } else {
-            console.log(err)
-          }
-        })
-      }
     },
     treeNodeMenu(event, nodeData) {
       const Menu = remote.Menu
@@ -408,7 +257,7 @@ export default {
         new MenuItem({
           label: '新增子文件夹',
           click: function() {
-            that.currentDirectoryId = nodeData.id
+            that.menucurrentDirectoryId = nodeData.id
             that.isAddChild = true
             that.showDirectoryEdit = true
           }
@@ -419,7 +268,7 @@ export default {
           new MenuItem({
             label: '修改文件夹',
             click: function() {
-              that.currentDirectoryId = nodeData.id
+              that.menucurrentDirectoryId = nodeData.id
               that.newDirectoryName = nodeData.label
               that.isAddChild = false
               that.showDirectoryEdit = true
@@ -442,75 +291,23 @@ export default {
                   }
                 )
                 .then(() => {
-                  db.all('select * from km_directory', function(err, rows) {
-                    if (!err) {
-                      const deleteIds = [nodeData.id]
-                      findChildIds(rows, nodeData.id, deleteIds)
-                      db.all(
-                        'select * from km_document where directory_id in (' +
-                          deleteIds.map(_ => '?') +
-                          ')',
-                        deleteIds,
-                        function(err, rows) {
-                          if (!err) {
-                            // 查出所有要删除的文件夹id
-                            db.serialize(function() {
-                              db.run('BEGIN')
-                              try {
-                                // 删除关联的文档
-                                db.run(
-                                  'delete from km_document where directory_id in (' +
-                                    deleteIds.map(_ => '?') +
-                                    ')',
-                                  deleteIds
-                                )
-                                // 删除当前节点及其子节点
-                                db.run(
-                                  'delete from km_directory where id in (' +
-                                    deleteIds.map(_ => '?') +
-                                    ')',
-                                  deleteIds
-                                )
-                                // 删除实体文件
-                                rows.forEach(row => {
-                                  if (row.PATH) {
-                                    deleteFile(row.PATH)
-                                  }
-                                })
-                                deleteIds.forEach(id => {
-                                  that.$refs.directoryTree.remove(id)
-                                })
-                                db.run('COMMIT')
-                                that.$message({
-                                  type: 'success',
-                                  message: '删除成功'
-                                })
-                              } catch (err) {
-                                console.log(err)
-                                db.run('ROLLBACK')
-                                that.$message({
-                                  type: 'error',
-                                  message: '删除失败'
-                                })
-                              }
-                            })
-                          } else {
-                            console.log(err)
-                            that.$message({
-                              type: 'error',
-                              message: '删除失败'
-                            })
-                          }
-                        }
-                      )
-                    } else {
+                  deleteDirectory(nodeData.id)
+                    .then(deleteIds => {
+                      deleteIds.forEach(id => {
+                        that.$refs.directoryTree.remove(id)
+                      })
+                      that.$message({
+                        type: 'success',
+                        message: '删除成功'
+                      })
+                    })
+                    .catch(err => {
                       console.log(err)
                       that.$message({
                         type: 'error',
                         message: '删除失败'
                       })
-                    }
-                  })
+                    })
                 })
             }
           })
@@ -634,7 +431,7 @@ export default {
             $createTime: Math.floor(Date.now() / 1000),
             $updateTime: Math.floor(Date.now() / 1000),
             $name: this.newDirectoryName,
-            $parent: this.currentDirectoryId
+            $parent: this.menucurrentDirectoryId
           },
           function(err) {
             if (!err) {
@@ -642,7 +439,7 @@ export default {
               that.showDirectoryEdit = false
               that.$refs.directoryTree.append(
                 { label: that.newDirectoryName, id: this.lastID },
-                that.currentDirectoryId
+                that.menucurrentDirectoryId
               )
             } else {
               console.log(err)
@@ -655,13 +452,13 @@ export default {
           {
             $updateTime: Math.floor(Date.now() / 1000),
             $name: this.newDirectoryName,
-            $id: this.currentDirectoryId
+            $id: this.menucurrentDirectoryId
           },
           function(err) {
             if (!err) {
               that.showDirectoryEdit = false
               that.$refs.directoryTree.getNode(
-                that.currentDirectoryId
+                that.menucurrentDirectoryId
               ).data.label = that.newDirectoryName
             } else {
               console.log(err)
@@ -712,58 +509,6 @@ export default {
           }
         }
       )
-    },
-    newDoc() {
-      const that = this
-      let path = ''
-      // 先新增个记录
-      if (this.newDocType === 'md') {
-        // 需要新增md文件
-        path = createMDFile()
-      } else if (this.newDocType === 'doc' || this.newDocType === 'mm') {
-        // 需要导入文件
-        this.showUploader = true
-        return
-      }
-      db.run(
-        'insert into KM_DOCUMENT (create_time,update_time,title,content,type,directory_id,path) values ($createTime,$updateTime,$title,$content,$type,$directoryId,$path)',
-        {
-          $createTime: Math.floor(Date.now() / 1000),
-          $updateTime: Math.floor(Date.now() / 1000),
-          $title: '未命名',
-          $content: '',
-          $type: this.newDocType,
-          $directoryId: this.$refs.directoryTree.getCurrentKey() || 0,
-          $path: path
-        },
-        function(err) {
-          if (!err) {
-            // 再刷新表格
-            const directoryId = that.$refs.directoryTree.getCurrentKey() || 0
-            db.all(
-              'select * from km_document where directory_id=? order by id desc',
-              [directoryId],
-              function(err, rows) {
-                if (!err) {
-                  that.docs.splice(0, that.docs.length)
-                  rows.forEach(row => {
-                    that.docs.push({
-                      id: row.ID,
-                      title: row.TITLE,
-                      path: row.PATH
-                    })
-                  })
-                } else {
-                  console.log(err)
-                }
-              }
-            )
-          } else {
-            console.log(err)
-          }
-        }
-      )
-      this.newDocVisible = false
     },
     showDoc(docId) {
       this.currentDocId = docId
@@ -955,67 +700,21 @@ export default {
         }
       )
     },
-    upload(arg) {
-      const path = copyFile(arg.file)
+    refreshDocTree(rows) {
       const that = this
-      db.run(
-        'insert into KM_DOCUMENT (create_time,update_time,title,content,type,directory_id,path) values ($createTime,$updateTime,$title,$content,$type,$directoryId,$path)',
-        {
-          $createTime: Math.floor(Date.now() / 1000),
-          $updateTime: Math.floor(Date.now() / 1000),
-          $title: '未命名',
-          $content: '',
-          $type: this.newDocType,
-          $directoryId: this.$refs.directoryTree.getCurrentKey() || 0,
-          $path: path
-        },
-        function(err) {
-          if (!err) {
-            // 再刷新表格
-            const directoryId = that.$refs.directoryTree.getCurrentKey() || 0
-            db.all(
-              'select * from km_document where directory_id=? order by id desc',
-              [directoryId],
-              function(err, rows) {
-                if (!err) {
-                  that.docs.splice(0, that.docs.length)
-                  rows.forEach(row => {
-                    that.docs.push({
-                      id: row.ID,
-                      title: row.TITLE,
-                      path: row.PATH
-                    })
-                  })
-                } else {
-                  console.log(err)
-                }
-              }
-            )
-          } else {
-            console.log(err)
-          }
-        }
-      )
-      this.newDocVisible = false
-      this.showUploader = false
-    },
-    submitUpload() {
-      this.$refs.uploader.submit()
+      this.docs.splice(0, this.docs.length)
+      rows.forEach(row => {
+        that.docs.push({
+          id: row.ID,
+          title: row.TITLE,
+          path: row.PATH
+        })
+      })
     }
   },
   computed: {
     showOpenFile() {
       return this.docType !== 'text'
-    },
-    allowType() {
-      switch (this.newDocType) {
-        case 'doc':
-          return '.doc,.docx'
-        case 'mm':
-          return '.xmind'
-        default:
-          return ''
-      }
     }
   }
 }
@@ -1060,14 +759,6 @@ export default {
     width 200px
   .el-select>.el-input
     width 110px
-  .el-tiptap-editor__menu-bar, .el-tiptap-editor>.el-tiptap-editor__content, .el-tiptap-editor__footer
-    border 0
-  .el-tiptap-editor__menu-bar:before
-    height 0
-  .el-tiptap-editor>.el-tiptap-editor__content
-    padding 10px
-  .readonly .el-tiptap-editor__menu-bar
-    display none
 .el-tag
   margin-right 5px
   margin-bottom 5px
