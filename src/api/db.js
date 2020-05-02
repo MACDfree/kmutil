@@ -19,8 +19,8 @@ export function newDoc(doc) {
         $directoryId: doc.directoryId || 0,
         $path: doc.path
       })
-  }).finally(() => {
-    dataBase.close()
+  }).then(() => {
+    return dataBase.close()
   })
 }
 
@@ -48,8 +48,8 @@ export function listDoc(directoryId) {
     })
   }
 
-  return ret.finally(() => {
-    dataBase.close()
+  return ret.then((obj) => {
+    return dataBase.close(obj)
   })
 }
 
@@ -57,8 +57,8 @@ export function listDirectory() {
   const dataBase = new DataBase()
   return dataBase.open().then(() => {
     return dataBase.all('select * from km_directory order by create_time')
-  }).finally(() => {
-    dataBase.close()
+  }).then((rows) => {
+    return dataBase.close(rows)
   })
 }
 
@@ -66,8 +66,8 @@ export function listTag() {
   const dataBase = new DataBase()
   return dataBase.open().then(() => {
     return dataBase.all('select * from km_tag order by create_time desc')
-  }).finally(() => {
-    dataBase.close()
+  }).then((rows) => {
+    return dataBase.close(rows)
   })
 }
 
@@ -100,14 +100,14 @@ export function deleteDirectory(directoryId) {
           }
         })
         dataBase.db.run('COMMIT')
-        return Promise.resolve(obj.dirIds)
       } catch (err) {
         dataBase.db.run('ROLLBACK')
-        return Promise.reject(err)
+        throw err
       }
     })
-  }).finally(() => {
-    dataBase.close()
+    return Promise.resolve(obj.dirIds)
+  }).then((dirIds) => {
+    return dataBase.close(dirIds)
   })
 }
 
@@ -122,14 +122,15 @@ export function deleteTag(tagId) {
         ])
         dataBase.db.run('DELETE FROM KM_TAG WHERE ID=?', [tagId])
         dataBase.db.run('COMMIT')
-        return Promise.resolve(tagId)
+        console.log(2)
       } catch (err) {
         dataBase.db.run('ROLLBACK')
-        return Promise.reject(err)
+        throw err
       }
     })
-  }).finally(() => {
-    dataBase.close()
+    return Promise.resolve(tagId)
+  }).then((ret) => {
+    return dataBase.close(ret)
   })
 }
 
@@ -145,14 +146,14 @@ export function deleteDoc(doc) {
           deleteFile(doc.path)
         }
         dataBase.db.run('COMMIT')
-        return Promise.resolve()
       } catch (err) {
         dataBase.db.run('ROLLBACK')
-        return Promise.reject(err)
+        throw err
       }
     })
-  }).finally(() => {
-    dataBase.close()
+    return Promise.resolve()
+  }).then(() => {
+    return dataBase.close()
   })
 }
 
@@ -181,13 +182,13 @@ export function addDocTag(tagName, docId) {
           [tagName]
         )
         dataBase.db.run('COMMIT')
-        return Promise.resolve()
       } catch (err2) {
         dataBase.db.run('ROLLBACK')
-        return Promise.reject(err2)
+        throw err2
       }
     })
-  }).finally(() => {
-    dataBase.close()
+    return Promise.resolve()
+  }).then(() => {
+    return dataBase.close()
   })
 }

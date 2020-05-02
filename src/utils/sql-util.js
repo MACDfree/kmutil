@@ -13,6 +13,7 @@ export class DataBase {
       const currentPath = global().currentPath
       console.log(currentPath)
       this.db = new sqlite3.Database(currentPath + '\\info.db', sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, err => {
+        console.log(this)
         if (!err) {
           resolve(this.db)
         } else {
@@ -22,11 +23,11 @@ export class DataBase {
     })
   }
 
-  close() {
+  close(param) {
     return new Promise((resolve, reject) => {
       this.db.close(err => {
         if (!err) {
-          resolve()
+          resolve(param)
         } else {
           reject(err)
         }
@@ -36,9 +37,9 @@ export class DataBase {
 
   run(sql, param) {
     return new Promise((resolve, reject) => {
-      this.db.run(sql, param, err => {
+      this.db.run(sql, param, function (err) {
         if (!err) {
-          resolve()
+          resolve(this.lastID)
         } else {
           reject(err)
         }
@@ -60,10 +61,13 @@ export class DataBase {
 
   get(sql, param) {
     return new Promise((resolve, reject) => {
-      this.db.get(sql, param, (err, row) => {
+      console.log('get1')
+      this.db.get(sql, param, function (err, row) {
         if (!err) {
+          console.log('get success1')
           resolve(row)
         } else {
+          console.log('get fail1')
           reject(err)
         }
       })

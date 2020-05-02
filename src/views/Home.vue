@@ -82,6 +82,7 @@
           ></el-option>
         </el-select>
         <el-button size="mini" @click="saveDoc">{{ editable?'保存修改':'开始编辑' }}</el-button>
+        <el-button size="mini" @click="cancelEdit" v-if="editable">取消编辑</el-button>
         <el-popover placement="top" width="300" v-model="visible">
           <el-tag
             :key="tag.id"
@@ -201,40 +202,7 @@ export default {
     NewDoc,
     Init
   },
-  mounted() {
-    // const that = this
-    // listDirectory()
-    //   .then(rows => {
-    //     that.directorys.push({
-    //       label: '文件夹',
-    //       id: 0,
-    //       children: findChildren(0, rows)
-    //     })
-    //     return listTag()
-    //   })
-    //   .then(rows => {
-    //     that.tags.push({
-    //       label: '标签',
-    //       id: 0,
-    //       children: rows.map(row => {
-    //         return { label: row.NAME, id: row.ID }
-    //       })
-    //     })
-    //     return listDoc()
-    //   })
-    //   .then(obj => {
-    //     obj.rows.forEach(row => {
-    //       that.docs.push({
-    //         id: row.ID,
-    //         title: row.TITLE,
-    //         path: row.PATH
-    //       })
-    //     })
-    //   })
-    //   .catch(err => {
-    //     console.log(err)
-    //   })
-  },
+  mounted() {},
   methods: {
     initData() {
       const that = this
@@ -468,10 +436,10 @@ export default {
               }
             )
           })
-          .then(() => {
+          .then(lastID => {
             that.showDirectoryEdit = false
             that.$refs.directoryTree.append(
-              { label: that.newDirectoryName, id: this.lastID },
+              { label: that.newDirectoryName, id: lastID },
               that.menucurrentDirectoryId
             )
           })
@@ -642,6 +610,9 @@ export default {
       }
       this.editable = !this.editable
     },
+    cancelEdit() {
+      this.editable = false
+    },
     deleteDocTag(tag) {
       const that = this
       const dataBase = new DataBase()
@@ -802,6 +773,8 @@ export default {
     width 200px
   .el-select>.el-input
     width 110px
+  .el-button+.el-button
+    margin-left 0
 .el-tag
   margin-right 5px
   margin-bottom 5px
