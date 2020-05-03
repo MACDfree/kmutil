@@ -40,7 +40,8 @@
 
 <script>
 import { copyFile, createMDFile } from '../utils/file-util'
-import { newDoc as newDocument, listDoc } from '../api/db'
+// import { newDoc as newDocument, listDoc } from '../api/db'
+import docOpt from '../api/docOpt'
 export default {
   props: {
     defaultDocType: {
@@ -48,7 +49,7 @@ export default {
       required: false
     },
     directoryId: {
-      type: Number,
+      type: String,
       required: false
     }
   },
@@ -79,7 +80,6 @@ export default {
   },
   methods: {
     newDoc() {
-      const that = this
       let path = ''
       // 先新增个记录
       if (this.newDocType === 'md') {
@@ -91,37 +91,53 @@ export default {
         this.newDocVisible = false
         return
       }
-      newDocument({
+      docOpt.insertDoc({
         type: this.newDocType,
         directoryId: this.directoryId,
         path: path
       })
-        .then(() => listDoc(that.directoryId))
-        .then(obj => {
-          that.$emit('refresh-doc', obj.rows)
-          that.newDocVisible = false
-        })
-        .catch(err => {
-          console.log(err)
-        })
+      const obj = docOpt.listDoc(this.directoryId)
+      this.$emit('refresh-doc', obj.list)
+      this.newDocVisible = false
+      // newDocument({
+      //   type: this.newDocType,
+      //   directoryId: this.directoryId,
+      //   path: path
+      // })
+      //   .then(() => listDoc(that.directoryId))
+      //   .then(obj => {
+      //     that.$emit('refresh-doc', obj.rows)
+      //     that.newDocVisible = false
+      //   })
+      //   .catch(err => {
+      //     console.log(err)
+      //   })
     },
     upload(arg) {
       const path = copyFile(arg.file)
-      const that = this
-      newDocument({
+      docOpt.insertDoc({
         type: this.newDocType,
         directoryId: this.directoryId,
         path: path
       })
-        .then(() => listDoc(that.directoryId))
-        .then(obj => {
-          that.$emit('refresh-doc', obj.rows)
-          that.newDocVisible = false
-          that.showUploader = false
-        })
-        .catch(err => {
-          console.log(err)
-        })
+      const obj = docOpt.listDoc(this.directoryId)
+      this.$emit('refresh-doc', obj.list)
+      this.newDocVisible = false
+      this.showUploader = false
+      // newDocument({
+      //   type: this.newDocType,
+      //   directoryId: this.directoryId,
+      //   path: path
+      // })
+      //   .then(() => listDoc(that.directoryId))
+      //   .then(obj => {
+      //     that.$emit('refresh-doc', obj.rows)
+      //     that.newDocVisible = false
+      //     that.showUploader = false
+      //   })
+      //   .catch(err => {
+      //     console.log(err)
+      //   })
     },
     submitUpload() {
       this.$refs.uploader.submit()

@@ -1,5 +1,5 @@
 import fs from 'fs'
-import uuid from 'node-uuid'
+import short from 'short-uuid'
 import { remote } from 'electron'
 import moment from 'moment'
 import path from 'path'
@@ -18,7 +18,7 @@ export function createMDFile() {
     throw new Error('currentPath is null')
   }
   const currentPath = sharedObject.currentPath
-  const dirPath = currentPath + '\\attach\\' + moment().format('YYYYMM') + '\\' + uuid.v4()
+  const dirPath = currentPath + '\\attach\\' + moment().format('YYYYMM') + '\\' + short.generate()
   mkDir(dirPath)
   const filePath = dirPath + '\\index.md'
   fs.writeFileSync(filePath, '# 未命名')
@@ -31,7 +31,7 @@ export function copyFile(file) {
     throw new Error('currentPath is null')
   }
   const currentPath = sharedObject.currentPath
-  const dirPath = currentPath + '\\attach\\' + moment().format('YYYYMM') + '\\' + uuid.v4()
+  const dirPath = currentPath + '\\attach\\' + moment().format('YYYYMM') + '\\' + short.generate()
   mkDir(dirPath)
   const filePath = dirPath + '\\' + file.name
   fs.copyFileSync(file.path, filePath)

@@ -53,7 +53,7 @@
         <NewDoc
           :default-doc-type="'text'"
           :directory-id="currentDirectoryId"
-          @refresh-doc="refreshDocTree"
+          @refresh-doc="refreshDocList"
         ></NewDoc>
       </div>
       <div class="list">
@@ -142,7 +142,7 @@ import Init from '../components/Init'
 import 'element-tiptap/lib/index.css'
 import { remote } from 'electron'
 import {
-  listDirectory,
+  // listDirectory,
   listTag,
   listDoc,
   deleteDirectory,
@@ -151,6 +151,8 @@ import {
   addDocTag
 } from '../api/db'
 import { findChildren } from '../utils/comm-func'
+import dirOpt from '../api/dirOpt'
+import docOpt from '../api/docOpt'
 
 export default {
   name: 'Home',
@@ -206,16 +208,14 @@ export default {
   methods: {
     initData() {
       const that = this
-      listDirectory()
-        .then(rows => {
-          that.directorys.splice(0, that.directorys.length)
-          that.directorys.push({
-            label: '文件夹',
-            id: 0,
-            children: findChildren(0, rows)
-          })
-          return listTag()
-        })
+      const dirList = dirOpt.listDir()
+      this.directorys.splice(0, that.directorys.length)
+      this.directorys.push({
+        label: '文件夹',
+        id: 'root',
+        children: findChildren('root', dirList)
+      })
+      listTag()
         .then(rows => {
           that.tags.splice(0, that.tags.length)
           that.tags.push({
@@ -244,22 +244,15 @@ export default {
     treeNodeClick(nodeData) {
       this.currentDirectoryId = nodeData.id
       this.$refs.tagTree.setCurrentKey(null)
-      const that = this
       const directoryId = nodeData.id
-      listDoc(directoryId)
-        .then(obj => {
-          that.docs.splice(0, that.docs.length)
-          obj.rows.forEach(row => {
-            that.docs.push({
-              id: row.ID,
-              title: row.TITLE,
-              path: row.PATH
-            })
-          })
+      this.docs.splice(0, this.docs.length)
+      docOpt.listDoc(directoryId).list.forEach(row => {
+        this.docs.push({
+          id: row.id,
+          title: row.title,
+          path: row.path
         })
-        .catch(err => {
-          console.log(err)
-        })
+      })
     },
     treeNodeMenu(event, nodeData) {
       const Menu = remote.Menu
@@ -420,60 +413,22 @@ export default {
       menu.popup(remote.getCurrentWindow())
     },
     submitDirectory() {
-      const that = this
-      const dataBase = new DataBase()
       if (this.isAddChild) {
-        dataBase
-          .open()
-          .then(() => {
-            return dataBase.run(
-              'INSERT INTO KM_DIRECTORY (CREATE_TIME,UPDATE_TIME,NAME,PARENT) VALUES ($createTime,$updateTime,$name,$parent)',
-              {
-                $createTime: Math.floor(Date.now() / 1000),
-                $updateTime: Math.floor(Date.now() / 1000),
-                $name: that.newDirectoryName,
-                $parent: that.menucurrentDirectoryId
-              }
-            )
-          })
-          .then(lastID => {
-            that.showDirectoryEdit = false
-            that.$refs.directoryTree.append(
-              { label: that.newDirectoryName, id: lastID },
-              that.menucurrentDirectoryId
-            )
-          })
-          .catch(err => {
-            console.log(err)
-          })
-          .finally(() => {
-            dataBase.close()
-          })
+        const lastId = dirOpt.insertDir(
+          this.newDirectoryName,
+          this.menucurrentDirectoryId
+        )
+        this.showDirectoryEdit = false
+        this.$refs.directoryTree.append(
+          { label: this.newDirectoryName, id: lastId },
+          this.menucurrentDirectoryId
+        )
       } else {
-        dataBase
-          .open()
-          .then(() => {
-            return dataBase.run(
-              'UPDATE KM_DIRECTORY SET UPDATE_TIME=$updateTime,NAME=$name WHERE ID=$id',
-              {
-                $updateTime: Math.floor(Date.now() / 1000),
-                $name: that.newDirectoryName,
-                $id: that.menucurrentDirectoryId
-              }
-            )
-          })
-          .then(() => {
-            that.showDirectoryEdit = false
-            that.$refs.directoryTree.getNode(
-              that.menucurrentDirectoryId
-            ).data.label = that.newDirectoryName
-          })
-          .catch(err => {
-            console.log(err)
-          })
-          .finally(() => {
-            dataBase.close()
-          })
+        dirOpt.updateDir(this.newDirectoryName, this.menucurrentDirectoryId)
+        this.showDirectoryEdit = false
+        this.$refs.directoryTree.getNode(
+          this.menucurrentDirectoryId
+        ).data.label = this.newDirectoryName
       }
     },
     tagTreeNodeClick(nodeData) {
@@ -535,41 +490,53 @@ export default {
     },
     showDoc(docId) {
       this.currentDocId = docId
-      const that = this
-      const dataBase = new DataBase()
-      dataBase
-        .open()
-        .then(() => {
-          return dataBase.get(
-            'select * from km_document where id=? order by id desc',
-            [docId]
-          )
+      // const that = this
+      // const dataBase = new DataBase()
+      const doc = docOpt.findDoc(docId)
+      this.content = doc.content
+      this.title = doc.title
+      this.docType = doc.type
+      this.docTags.splice(0, this.docTags.length)
+      doc.tags.forEach(row => {
+        this.docTags.push({
+          id: row.id,
+          name: row.name
         })
-        .then(row => {
-          that.content = row.CONTENT
-          that.title = row.TITLE
-          that.docType = row.TYPE
-          // 获取文档的标签
-          return dataBase.all(
-            'select a.* from KM_TAG a INNER JOIN KM_DOC_TAG b ON a.ID=b.TAG_ID WHERE b.DOC_ID=? order by a.ID desc',
-            [docId]
-          )
-        })
-        .then(rows => {
-          that.docTags.splice(0, that.docTags.length)
-          rows.forEach(row => {
-            that.docTags.push({
-              id: row.ID,
-              name: row.NAME
-            })
-          })
-        })
-        .catch(err => {
-          console.log(err)
-        })
-        .finally(() => {
-          dataBase.close()
-        })
+      })
+
+      // dataBase
+      //   .open()
+      //   .then(() => {
+      //     return dataBase.get(
+      //       'select * from km_document where id=? order by id desc',
+      //       [docId]
+      //     )
+      //   })
+      //   .then(row => {
+      //     that.content = row.CONTENT
+      //     that.title = row.TITLE
+      //     that.docType = row.TYPE
+      //     // 获取文档的标签
+      //     return dataBase.all(
+      //       'select a.* from KM_TAG a INNER JOIN KM_DOC_TAG b ON a.ID=b.TAG_ID WHERE b.DOC_ID=? order by a.ID desc',
+      //       [docId]
+      //     )
+      //   })
+      //   .then(rows => {
+      //     that.docTags.splice(0, that.docTags.length)
+      //     rows.forEach(row => {
+      //       that.docTags.push({
+      //         id: row.ID,
+      //         name: row.NAME
+      //       })
+      //     })
+      //   })
+      //   .catch(err => {
+      //     console.log(err)
+      //   })
+      //   .finally(() => {
+      //     dataBase.close()
+      //   })
     },
     saveDoc() {
       if (!this.currentDocId) {
@@ -714,14 +681,14 @@ export default {
           dataBase.close()
         })
     },
-    refreshDocTree(rows) {
+    refreshDocList(rows) {
       const that = this
       this.docs.splice(0, this.docs.length)
       rows.forEach(row => {
         that.docs.push({
-          id: row.ID,
-          title: row.TITLE,
-          path: row.PATH
+          id: row.id,
+          title: row.title,
+          path: row.path
         })
       })
     }

@@ -12,7 +12,7 @@
 
 <script>
 import { ipcRenderer } from 'electron'
-import { init } from '../api/init'
+import { initNew } from '../api/init'
 
 export default {
   data() {
@@ -29,7 +29,7 @@ export default {
     initHandle() {
       const that = this
       that.show = true
-      init(per => {
+      initNew(per => {
         that.percent = per
         if (per === 100) {
           that.show = false

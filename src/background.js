@@ -151,6 +151,7 @@ function newRepo() {
   }).then(function (ret) {
     if (!ret.canceled) {
       const currentPath = ret.filePaths[0]
+      store.set("recentPath", currentPath)
       global.sharedObject = {
         currentPath: currentPath
       }

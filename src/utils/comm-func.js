@@ -7,14 +7,14 @@ export function findChildIds(list, pid, deleteIds) {
   })
 }
 
-export function findChildren(parent, list) {
+export function findChildren(pid, list) {
   const nodes = []
   list.forEach(row => {
-    if (row.PARENT === parent) {
+    if (row.pid === pid) {
       nodes.push({
-        label: row.NAME,
-        id: row.ID,
-        children: findChildren(row.ID, list)
+        label: row.name,
+        id: row.id,
+        children: findChildren(row.id, list)
       })
     }
   })
