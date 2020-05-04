@@ -10,8 +10,6 @@ import Store from 'electron-store'
 
 import { autoUpdater } from 'electron-updater'
 
-import fs from 'fs'
-
 const isDevelopment = process.env.NODE_ENV !== 'production'
 
 // Keep a global reference of the window object, if you don't, the window will
@@ -31,7 +29,8 @@ function createWindow() {
     height: 800,
     webPreferences: {
       nodeIntegration: true
-    }
+    },
+    icon: 'resources/ico/icon.ico'
   })
 
   if (process.env.WEBPACK_DEV_SERVER_URL) {
@@ -121,12 +120,12 @@ function createMenu() {
       label: '文件',
       submenu: [
         {
-          label: '新建库',
-          click: newRepo
+          label: '选择库',
+          click: selRepo
         },
         {
-          label: '打开库',
-          click: openRepo
+          label: '设置',
+          click: setting
         },
         {
           label: '检查更新',
@@ -143,7 +142,7 @@ function createMenu() {
   Menu.setApplicationMenu(menu)
 }
 
-function newRepo() {
+function selRepo() {
   dialog.showOpenDialog({
     properties: [
       'openDirectory'
@@ -160,23 +159,8 @@ function newRepo() {
   })
 }
 
-function openRepo() {
-  dialog.showOpenDialog({
-    properties: [
-      'openDirectory'
-    ]
-  }).then(function (ret) {
-    if (!ret.canceled) {
-      const currentPath = ret.filePaths[0]
-      store.set("recentPath", currentPath)
-      const repoName = currentPath.substring(currentPath.lastIndexOf('\\') + 1)
-      win.setTitle('知识管理 [' + repoName + ']')
-      global.sharedObject = {
-        currentPath: currentPath
-      }
-      win.reload()
-    }
-  })
+function setting() {
+  win.webContents.send('setting', '')
 }
 
 // 刷新页面指令

@@ -138,6 +138,7 @@
       </span>
     </el-dialog>
     <Init @init-finish="initData"></Init>
+    <Setting></Setting>
   </div>
 </template>
 
@@ -148,6 +149,7 @@ import global from '../utils/global'
 import EditArea from '../components/EditArea'
 import NewDoc from '../components/NewDoc'
 import Init from '../components/Init'
+import Setting from '../components/Setting'
 import 'element-tiptap/lib/index.css'
 import { remote } from 'electron'
 import { findChildren } from '../utils/comm-func'
@@ -155,6 +157,8 @@ import dirOpt from '../api/dirOpt'
 import docOpt from '../api/docOpt'
 import tagOpt from '../api/tagOpt'
 import moment from 'moment'
+import Store from 'electron-store'
+const store = new Store()
 
 export default {
   name: 'Home',
@@ -205,7 +209,8 @@ export default {
   components: {
     EditArea,
     NewDoc,
-    Init
+    Init,
+    Setting
   },
   mounted() {},
   methods: {
@@ -514,15 +519,30 @@ export default {
     openFile() {
       if (this.docPath) {
         let cmd = ''
+        const filePath = `${global().currentPath}\\attach\\${this.docPath}`
         // 打开文件
         if (this.docType === 'md') {
-          cmd = `D:\\Program\\Typora\\Typora.exe ${
-            global().currentPath
-          }\\attach\\${this.docPath}`
+          const s = store.get('markdown')
+          if (!s) {
+            this.$message({
+              message: '请先设置Markdown程序路径',
+              type: 'warning'
+            })
+            return
+          }
+          // eslint-disable-next-line no-template-curly-in-string
+          cmd = s.replace('${filePath}', filePath)
         } else if (this.docType === 'mm') {
-          cmd = `"C:\\Program Files\\XMind\\XMind.exe" ${
-            global().currentPath
-          }\\attach\\${this.docPath}`
+          const s = store.get('mindmap')
+          if (!s) {
+            this.$message({
+              message: '请先设置脑图程序路径',
+              type: 'warning'
+            })
+            return
+          }
+          // eslint-disable-next-line no-template-curly-in-string
+          cmd = s.replace('${filePath}', filePath)
         } else if (this.docType === 'doc') {
           // TODO
         }
