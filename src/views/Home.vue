@@ -133,7 +133,6 @@
 
 <script>
 // @ is an alias to /src
-import { DataBase } from '../utils/sql-util'
 import { exec } from 'child_process'
 import global from '../utils/global'
 import EditArea from '../components/EditArea'
@@ -141,18 +140,10 @@ import NewDoc from '../components/NewDoc'
 import Init from '../components/Init'
 import 'element-tiptap/lib/index.css'
 import { remote } from 'electron'
-import {
-  // listDirectory,
-  listTag,
-  listDoc,
-  deleteDirectory,
-  deleteTag,
-  deleteDoc,
-  addDocTag
-} from '../api/db'
 import { findChildren } from '../utils/comm-func'
 import dirOpt from '../api/dirOpt'
 import docOpt from '../api/docOpt'
+import tagOpt from '../api/tagOpt'
 
 export default {
   name: 'Home',
@@ -169,9 +160,10 @@ export default {
       visible: false,
       docTags: [],
       docType: 'text',
+      docPath: '',
       showDirectoryEdit: false,
       newDirectoryName: '',
-      currentDirectoryId: 0,
+      currentDirectoryId: 'root',
       menucurrentDirectoryId: null,
       isAddChild: false,
       currentTagId: null,
@@ -215,31 +207,25 @@ export default {
         id: 'root',
         children: findChildren('root', dirList)
       })
-      listTag()
-        .then(rows => {
-          that.tags.splice(0, that.tags.length)
-          that.tags.push({
-            label: '标签',
-            id: 0,
-            children: rows.map(row => {
-              return { label: row.NAME, id: row.ID }
-            })
-          })
-          return listDoc()
+
+      const tagList = tagOpt.listTag()
+      this.tags.splice(0, that.tags.length)
+      this.tags.push({
+        label: '标签',
+        id: 0,
+        children: tagList.map(row => {
+          return { label: row.name, id: row.id }
         })
-        .then(obj => {
-          obj.rows.forEach(row => {
-            that.docs.splice(0, that.docs.length)
-            that.docs.push({
-              id: row.ID,
-              title: row.TITLE,
-              path: row.PATH
-            })
-          })
+      })
+
+      this.docs.splice(0, that.docs.length)
+      docOpt.listDoc().list.forEach(row => {
+        this.docs.push({
+          id: row.id,
+          title: row.title,
+          path: row.path
         })
-        .catch(err => {
-          console.log(err)
-        })
+      })
     },
     treeNodeClick(nodeData) {
       this.currentDirectoryId = nodeData.id
@@ -297,23 +283,14 @@ export default {
                   }
                 )
                 .then(() => {
-                  deleteDirectory(nodeData.id)
-                    .then(deleteIds => {
-                      deleteIds.forEach(id => {
-                        that.$refs.directoryTree.remove(id)
-                      })
-                      that.$message({
-                        type: 'success',
-                        message: '删除成功'
-                      })
-                    })
-                    .catch(err => {
-                      console.log(err)
-                      that.$message({
-                        type: 'error',
-                        message: '删除失败'
-                      })
-                    })
+                  const deleteIds = dirOpt.deleteDir(nodeData.id)
+                  deleteIds.forEach(id => {
+                    that.$refs.directoryTree.remove(id)
+                  })
+                  that.$message({
+                    type: 'success',
+                    message: '删除成功'
+                  })
                 })
             }
           })
@@ -351,21 +328,12 @@ export default {
                 type: 'warning'
               })
               .then(() => {
-                deleteTag(nodeData.id)
-                  .then(tagId => {
-                    that.$refs.tagTree.remove(tagId)
-                    that.$message({
-                      type: 'success',
-                      message: '删除成功'
-                    })
-                  })
-                  .catch(err => {
-                    console.log(err)
-                    that.$message({
-                      type: 'error',
-                      message: '删除失败'
-                    })
-                  })
+                tagOpt.deleteTag(nodeData.id)
+                that.$refs.tagTree.remove(nodeData.id)
+                that.$message({
+                  type: 'success',
+                  message: '删除成功'
+                })
               })
           }
         })
@@ -388,24 +356,15 @@ export default {
                 type: 'warning'
               })
               .then(() => {
-                deleteDoc(doc)
-                  .then(() => {
-                    that.docs.splice(
-                      that.docs.findIndex(item => item.id === doc.id),
-                      1
-                    )
-                    that.$message({
-                      type: 'success',
-                      message: '删除成功'
-                    })
-                  })
-                  .catch(err => {
-                    console.log(err)
-                    that.$message({
-                      type: 'error',
-                      message: '删除失败'
-                    })
-                  })
+                docOpt.deleteDoc([doc.id])
+                that.docs.splice(
+                  that.docs.findIndex(item => item.id === doc.id),
+                  1
+                )
+                that.$message({
+                  type: 'success',
+                  message: '删除成功'
+                })
               })
           }
         })
@@ -433,110 +392,35 @@ export default {
     },
     tagTreeNodeClick(nodeData) {
       this.$refs.directoryTree.setCurrentKey(null)
-      const that = this
       const tagId = nodeData.id
-      const dataBase = new DataBase()
-      dataBase
-        .open()
-        .then(() => {
-          return dataBase.all(
-            'SELECT a.* FROM KM_DOCUMENT a INNER JOIN KM_DOC_TAG b ON a.ID=b.DOC_ID WHERE b.TAG_ID=? ORDER BY a.CREATE_TIME DESC',
-            [tagId]
-          )
+      this.docs.splice(0, this.docs.length)
+      docOpt.listDocByTagId(tagId).forEach(row => {
+        this.docs.push({
+          id: row.id,
+          title: row.title,
+          path: row.path
         })
-        .then(rows => {
-          that.docs.splice(0, that.docs.length)
-          rows.forEach(row => {
-            that.docs.push({
-              id: row.ID,
-              title: row.TITLE,
-              path: row.PATH
-            })
-          })
-        })
-        .catch(err => {
-          console.log(err)
-        })
-        .finally(() => {
-          dataBase.close()
-        })
+      })
     },
     submitTag() {
-      const that = this
-      const dataBase = new DataBase()
-      dataBase
-        .open()
-        .then(() => {
-          return dataBase.run(
-            'UPDATE KM_TAG SET UPDATE_TIME=$updateTime,NAME=$name WHERE ID=$id',
-            {
-              $updateTime: Math.floor(Date.now() / 1000),
-              $name: that.newTagName,
-              $id: that.currentTagId
-            }
-          )
-        })
-        .then(() => {
-          that.showTagEdit = false
-          that.$refs.tagTree.getNode(that.currentTagId).data.label =
-            that.newTagName
-        })
-        .catch(err => {
-          console.log(err)
-        })
-        .finally(() => {
-          dataBase.close()
-        })
+      tagOpt.updateTag(this.currentTagId, this.newTagName)
+      this.showTagEdit = false
+      this.$refs.tagTree.getNode(this.currentTagId).data.label = this.newTagName
     },
     showDoc(docId) {
       this.currentDocId = docId
-      // const that = this
-      // const dataBase = new DataBase()
       const doc = docOpt.findDoc(docId)
       this.content = doc.content
       this.title = doc.title
       this.docType = doc.type
+      this.docPath = doc.path
       this.docTags.splice(0, this.docTags.length)
-      doc.tags.forEach(row => {
+      tagOpt.listDocTag(docId).forEach(row => {
         this.docTags.push({
           id: row.id,
           name: row.name
         })
       })
-
-      // dataBase
-      //   .open()
-      //   .then(() => {
-      //     return dataBase.get(
-      //       'select * from km_document where id=? order by id desc',
-      //       [docId]
-      //     )
-      //   })
-      //   .then(row => {
-      //     that.content = row.CONTENT
-      //     that.title = row.TITLE
-      //     that.docType = row.TYPE
-      //     // 获取文档的标签
-      //     return dataBase.all(
-      //       'select a.* from KM_TAG a INNER JOIN KM_DOC_TAG b ON a.ID=b.TAG_ID WHERE b.DOC_ID=? order by a.ID desc',
-      //       [docId]
-      //     )
-      //   })
-      //   .then(rows => {
-      //     that.docTags.splice(0, that.docTags.length)
-      //     rows.forEach(row => {
-      //       that.docTags.push({
-      //         id: row.ID,
-      //         name: row.NAME
-      //       })
-      //     })
-      //   })
-      //   .catch(err => {
-      //     console.log(err)
-      //   })
-      //   .finally(() => {
-      //     dataBase.close()
-      //   })
     },
     saveDoc() {
       if (!this.currentDocId) {
@@ -544,36 +428,12 @@ export default {
         return
       }
       if (this.editable) {
-        const that = this
-        const dataBase = new DataBase()
-        dataBase
-          .open()
-          .then(() => {
-            return dataBase.run(
-              'update km_document set title=$title,content=$content,update_time=$updateTime where id=$id',
-              {
-                $title: this.title,
-                $content: this.content,
-                $updateTime: Math.floor(Date.now() / 1000),
-                $id: this.currentDocId
-              }
-            )
-          })
-          .then(() => {
-            // 同步更新列表
-            const currentDoc = that.docs.find(
-              doc => doc.id === that.currentDocId
-            )
-            if (currentDoc) {
-              currentDoc.title = that.title
-            }
-          })
-          .catch(err => {
-            console.log(err)
-          })
-          .finally(() => {
-            dataBase.close()
-          })
+        docOpt.updateDoc(this.currentDocId, this.title, this.content)
+        // 同步更新列表
+        const currentDoc = this.docs.find(doc => doc.id === this.currentDocId)
+        if (currentDoc) {
+          currentDoc.title = this.title
+        }
       }
       this.editable = !this.editable
     },
@@ -581,28 +441,11 @@ export default {
       this.editable = false
     },
     deleteDocTag(tag) {
-      const that = this
-      const dataBase = new DataBase()
-      dataBase
-        .open()
-        .then(() => {
-          return dataBase.run(
-            'DELETE FROM KM_DOC_TAG WHERE DOC_ID=? AND TAG_ID IN (SELECT ID FROM KM_TAG WHERE NAME=?)',
-            [this.currentDocId, tag.name]
-          )
-        })
-        .then(() => {
-          that.docTags.splice(
-            that.docTags.findIndex(item => item.name === tag.name),
-            1
-          )
-        })
-        .catch(err => {
-          console.log(err)
-        })
-        .finally(() => {
-          dataBase.close()
-        })
+      tagOpt.deleteDocTag(tag.name, this.currentDocId)
+      this.docTags.splice(
+        this.docTags.findIndex(item => item.name === tag.name),
+        1
+      )
     },
     showInput() {
       this.inputVisible = true
@@ -623,63 +466,44 @@ export default {
         }
         const that = this
         // 判断标签是否存在
-        addDocTag(inputValue, this.currentDocId)
-          .then(() => {
-            that.docTags.push({ name: inputValue })
-            return listTag()
+        tagOpt.insertDocTag(inputValue, this.currentDocId)
+        this.docTags.push({ name: inputValue })
+        const tagList = tagOpt.listTag()
+        this.tags.splice(0, that.tags.length)
+        this.tags.push({
+          label: '标签',
+          id: 'root',
+          children: tagList.map(row => {
+            return { label: row.name, id: row.id }
           })
-          .then(rows => {
-            that.tags.splice(0, that.tags.length)
-            that.tags.push({
-              label: '标签',
-              id: 0,
-              children: rows.map(row => {
-                return { label: row.NAME, id: row.ID }
-              })
-            })
-          })
-          .catch(err => {
-            console.log(err)
-          })
+        })
       }
       this.inputVisible = false
       this.inputValue = ''
     },
     openFile() {
-      const dataBase = new DataBase()
-      dataBase
-        .open()
-        .then(() => {
-          return dataBase.get('SELECT PATH,TYPE FROM KM_DOCUMENT WHERE ID=?', [
-            this.currentDocId
-          ])
-        })
-        .then(row => {
-          if (row.PATH) {
-            let cmd = ''
-            // 打开文件
-            if (row.TYPE === 'md') {
-              cmd = `D:\\Program\\Typora\\Typora.exe ${global.currentPath}\\attach\\${row.PATH}`
-            } else if (row.TYPE === 'mm') {
-              cmd = `"C:\\Program Files\\XMind\\XMind.exe" ${global.currentPath}\\attach\\${row.PATH}`
-            } else if (row.TYPE === 'doc') {
-              // TODO
+      if (this.docPath) {
+        let cmd = ''
+        // 打开文件
+        if (this.docType === 'md') {
+          cmd = `D:\\Program\\Typora\\Typora.exe ${
+            global().currentPath
+          }\\attach\\${this.docPath}`
+        } else if (this.docType === 'mm') {
+          cmd = `"C:\\Program Files\\XMind\\XMind.exe" ${
+            global().currentPath
+          }\\attach\\${this.docPath}`
+        } else if (this.docType === 'doc') {
+          // TODO
+        }
+        if (cmd) {
+          exec(cmd, function(err, stdout, stderr) {
+            if (err) {
+              console.log(err)
             }
-            if (cmd) {
-              exec(cmd, function(err, stdout, stderr) {
-                if (err) {
-                  console.log(err)
-                }
-              })
-            }
-          }
-        })
-        .catch(err => {
-          console.log(err)
-        })
-        .finally(() => {
-          dataBase.close()
-        })
+          })
+        }
+      }
     },
     refreshDocList(rows) {
       const that = this

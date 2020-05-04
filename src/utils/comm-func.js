@@ -1,8 +1,8 @@
 export function findChildIds(list, pid, deleteIds) {
   list.forEach(row => {
-    if (row.PARENT === pid) {
-      deleteIds.push(row.ID)
-      findChildIds(list, row.ID, deleteIds)
+    if (row.pid === pid) {
+      deleteIds.push(row.id)
+      findChildIds(list, row.id, deleteIds)
     }
   })
 }
