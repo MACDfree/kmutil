@@ -49,6 +49,7 @@
           placeholder="请输入搜索内容"
           prefix-icon="el-icon-search"
           v-model="searchStr"
+          @keyup.enter.native="searchDoc"
         ></el-input>
         <NewDoc
           :default-doc-type="'text'"
@@ -65,7 +66,15 @@
             :class="{active: doc.id===currentDocId}"
             @click.right="docMenu(doc)"
           >
-            <span>{{ doc.title }}</span>
+            <div>
+              <i class="el-icon-document"></i>
+              {{ doc.title }}
+            </div>
+            <div class="time">
+              <span>A：{{ doc.createTime }}</span>
+              <br />
+              <span>M：{{ doc.updateTime }}</span>
+            </div>
           </li>
         </ul>
       </div>
@@ -91,15 +100,16 @@
             :disable-transitions="false"
             @close="deleteDocTag(tag)"
           >{{tag.name}}</el-tag>
-          <el-input
+          <el-autocomplete
             class="input-new-tag"
             v-if="inputVisible"
             v-model="inputValue"
             ref="saveTagInput"
             size="small"
             @keyup.enter.native="handleInputConfirm"
-            @blur="handleInputConfirm"
-          ></el-input>
+            @blur="handleInputConfirmBlur"
+            :fetch-suggestions="listTag"
+          ></el-autocomplete>
           <el-button
             v-else
             class="button-new-tag"
@@ -144,6 +154,7 @@ import { findChildren } from '../utils/comm-func'
 import dirOpt from '../api/dirOpt'
 import docOpt from '../api/docOpt'
 import tagOpt from '../api/tagOpt'
+import moment from 'moment'
 
 export default {
   name: 'Home',
@@ -223,7 +234,9 @@ export default {
         this.docs.push({
           id: row.id,
           title: row.title,
-          path: row.path
+          path: row.path,
+          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
+          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
       })
     },
@@ -236,7 +249,9 @@ export default {
         this.docs.push({
           id: row.id,
           title: row.title,
-          path: row.path
+          path: row.path,
+          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm'),
+          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm')
         })
       })
     },
@@ -398,7 +413,9 @@ export default {
         this.docs.push({
           id: row.id,
           title: row.title,
-          path: row.path
+          path: row.path,
+          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm'),
+          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm')
         })
       })
     },
@@ -447,6 +464,16 @@ export default {
         1
       )
     },
+    listTag(queryString, cb) {
+      console.log(queryString)
+      const tags = tagOpt.searchTag(queryString)
+      console.log(tags.map(tag => tag.name))
+      cb(
+        tags.map(tag => {
+          return { value: tag.name }
+        })
+      )
+    },
     showInput() {
       this.inputVisible = true
       this.$nextTick(_ => {
@@ -481,6 +508,9 @@ export default {
       this.inputVisible = false
       this.inputValue = ''
     },
+    handleInputConfirmBlur(event) {
+      setTimeout(this.handleInputConfirm, 500)
+    },
     openFile() {
       if (this.docPath) {
         let cmd = ''
@@ -512,9 +542,31 @@ export default {
         that.docs.push({
           id: row.id,
           title: row.title,
-          path: row.path
+          path: row.path,
+          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
+          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
       })
+    },
+    searchDoc() {
+      const dirId = this.currentDirectoryId
+      const str = '.*' + this.searchStr + '.*'
+      const reg = new RegExp(str)
+      this.docs.splice(0, this.docs.length)
+      docOpt
+        .listDoc(dirId)
+        .list.filter(function(doc) {
+          return reg.test(doc.title) || reg.test(doc.content)
+        })
+        .forEach(row => {
+          this.docs.push({
+            id: row.id,
+            title: row.title,
+            path: row.path,
+            createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
+            updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
+          })
+        })
     }
   },
   computed: {
@@ -541,8 +593,7 @@ export default {
   .el-tree-node
     margin 2px
 .middle
-  width 300px
-  flex 0 0 300px
+  flex 0 0 246px
   text-align left
   .list li
     text-align left
@@ -553,6 +604,10 @@ export default {
       background-color #F5F7FA
     &.active
       background-color #f0f7ff
+    .time
+      font-size 11px
+      padding-left 2px
+      font-family Consolas, 'Courier New', Courier, FreeMono, monospace
   .el-input
     width 200px
 .main
@@ -576,7 +631,7 @@ export default {
   padding-bottom 0
   margin-bottom 5px
 .input-new-tag
-  width 90px
+  width 120px
   vertical-align bottom
   margin-bottom 5px
 .el-popover>.el-select

@@ -51,4 +51,11 @@ function deleteDocTag(tagName, docId) {
   db().get('docTags').remove(docTag => docTag.tagId === tagId && docTag.docId === docId).write()
 }
 
-export default { findTag, listDocTag, insertDocTag, listTag, updateTag, deleteTag, deleteDocTag }
+function searchTag(queryStr) {
+  return db().get('tags').filter(function (tag) {
+    const reg = '.*' + queryStr + '.*'
+    return new RegExp(reg).test(tag.name)
+  }).value()
+}
+
+export default { findTag, listDocTag, insertDocTag, listTag, updateTag, deleteTag, deleteDocTag, searchTag }
