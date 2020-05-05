@@ -255,8 +255,8 @@ export default {
           id: row.id,
           title: row.title,
           path: row.path,
-          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm'),
-          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm')
+          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
+          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
       })
     },
@@ -419,8 +419,8 @@ export default {
           id: row.id,
           title: row.title,
           path: row.path,
-          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm'),
-          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm')
+          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
+          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
       })
     },
