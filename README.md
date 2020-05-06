@@ -1,24 +1,13 @@
 # kmutil
 
-## Project setup
-```
-npm install
-```
+## 背景
 
-### Compiles and hot-reloads for development
-```
-npm run serve
-```
+在使用了一些笔记类软件后，感觉无非是一个带文件夹和标签功能的编辑器再加上云端同步。在使用过程中遇到了以下问题：
 
-### Compiles and minifies for production
-```
-npm run build
-```
+1. 必须使用软件指定的云服务，无法自由选择，感觉不安全；
+1. 记录的内容只有此软件才能打开，不够开放；
+1. 虽然现在笔记软件一直在整合markdown、脑图等功能，但使用体验远比不上专业软件
 
-### Lints and fixes files
-```
-npm run lint
-```
+## 想法
 
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+充分利用现有的专业软件，只实现一个文档汇聚器。
