@@ -1,15 +1,9 @@
-import global from '../utils/global'
-import low from 'lowdb'
-import FileSync from 'lowdb/adapters/FileSync'
+import db from '../utils/db'
 
 export function initNew(cb) {
-  let per = 10
+  let per = 50
   cb(per)
-  const adapter = new FileSync(global().currentPath + '\\info.json')
-  const db = low(adapter)
-  per = 50
-  cb(per)
-  db.defaults({ directorys: [], tags: [], documents: [], docTags: [] }).write()
+  db().defaults({ directorys: [], tags: [], documents: [], docTags: [] }).write()
   per = 100
   cb(per)
 }

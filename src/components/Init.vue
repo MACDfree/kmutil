@@ -13,6 +13,7 @@
 <script>
 import { ipcRenderer } from 'electron'
 import { initNew } from '../api/init'
+import global from '../utils/global'
 
 export default {
   data() {
@@ -23,7 +24,11 @@ export default {
   },
   mounted() {
     ipcRenderer.on('init', this.initHandle)
-    this.initHandle()
+    if (global().currentPath) {
+      this.initHandle()
+    } else {
+      this.show = false
+    }
   },
   methods: {
     initHandle() {
