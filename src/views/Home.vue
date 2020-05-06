@@ -67,7 +67,7 @@
             @click.right="docMenu(doc)"
           >
             <div>
-              <i class="el-icon-document"></i>
+              <i :class="docIcon(doc.type)"></i>
               {{ doc.title }}
             </div>
             <div class="time">
@@ -82,14 +82,6 @@
     <div class="main">
       <div>
         <el-input v-model="title" placeholder="请输入标题" size="mini" :disabled="!editable"></el-input>
-        <el-select v-model="docType" placeholder="请选择" size="mini" :disabled="true">
-          <el-option
-            v-for="type in types"
-            :key="type.value"
-            :label="type.label"
-            :value="type.value"
-          ></el-option>
-        </el-select>
         <el-button size="mini" @click="saveDoc">{{ editable?'保存修改':'开始编辑' }}</el-button>
         <el-button size="mini" @click="cancelEdit" v-if="editable">取消编辑</el-button>
         <el-popover placement="top" width="300" v-model="visible">
@@ -240,6 +232,7 @@ export default {
           id: row.id,
           title: row.title,
           path: row.path,
+          type: row.type,
           createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
           updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
@@ -255,6 +248,7 @@ export default {
           id: row.id,
           title: row.title,
           path: row.path,
+          type: row.type,
           createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
           updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
@@ -419,6 +413,7 @@ export default {
           id: row.id,
           title: row.title,
           path: row.path,
+          type: row.type,
           createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
           updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
@@ -563,6 +558,7 @@ export default {
           id: row.id,
           title: row.title,
           path: row.path,
+          type: row.type,
           createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
           updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
@@ -583,10 +579,23 @@ export default {
             id: row.id,
             title: row.title,
             path: row.path,
+            type: row.type,
             createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
             updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
           })
         })
+    },
+    docIcon(type) {
+      switch (type) {
+        case 'md':
+          return 'iconfont el-icon-custom-markdown-line'
+        case 'mm':
+          return 'iconfont el-icon-custom-icons-mind_map'
+        case 'doc':
+          return 'iconfont el-icon-custom-word'
+        default:
+          return 'el-icon-document'
+      }
     }
   },
   computed: {

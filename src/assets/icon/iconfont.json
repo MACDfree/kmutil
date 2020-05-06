@@ -1,0 +1,30 @@
+{
+  "id": "1801359",
+  "name": "kmutil",
+  "font_family": "iconfont",
+  "css_prefix_text": "el-icon-custom-",
+  "description": "",
+  "glyphs": [
+    {
+      "icon_id": "8765263",
+      "name": "word",
+      "font_class": "word",
+      "unicode": "e640",
+      "unicode_decimal": 58944
+    },
+    {
+      "icon_id": "9204236",
+      "name": "icons8-mind_map",
+      "font_class": "icons-mind_map",
+      "unicode": "e664",
+      "unicode_decimal": 58980
+    },
+    {
+      "icon_id": "11636107",
+      "name": "markdown-line",
+      "font_class": "markdown-line",
+      "unicode": "e7a9",
+      "unicode_decimal": 59305
+    }
+  ]
+}
