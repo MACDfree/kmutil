@@ -3,7 +3,6 @@
     v-model="context"
     :extensions="extensions"
     :readonly="!editable"
-    height="100%"
     :class="{readonly: !editable}"
   ></el-tiptap>
 </template>
@@ -87,12 +86,15 @@ export default {
 </script>
 
 <style lang="stylus">
+.el-tiptap-editor
+  flex-grow 1
 .el-tiptap-editor__menu-bar, .el-tiptap-editor>.el-tiptap-editor__content, .el-tiptap-editor__footer
   border 0
 .el-tiptap-editor__menu-bar:before
   height 0
 .el-tiptap-editor>.el-tiptap-editor__content
   padding 10px
+  height 1px
 .readonly .el-tiptap-editor__menu-bar
   display none
 </style>
