@@ -609,10 +609,10 @@ export default {
 <style lang="stylus">
 .home
   display flex
-  height 100%
+  min-height 100vh
+  min-width 980px
 .left
-  width 200px
-  flex 0 0 200px
+  flex 1 1 200px
   .category
     overflow auto
     .directory-tree-node>span
@@ -622,7 +622,7 @@ export default {
   .el-tree-node
     margin 2px
 .middle
-  flex 0 0 246px
+  flex 1 1 246px
   text-align left
   .list li
     text-align left
@@ -640,7 +640,7 @@ export default {
   .el-input
     width 200px
 .main
-  width 100%
+  flex 5 5 auto
   display flex
   flex-direction column
   align-items flex-start
