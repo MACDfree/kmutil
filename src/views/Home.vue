@@ -131,6 +131,7 @@
     </el-dialog>
     <Init @init-finish="initData"></Init>
     <Setting></Setting>
+    <MoveDoc :show="moveDocShow" :doc-id="menuCurrentDocId"></MoveDoc>
   </div>
 </template>
 
@@ -142,7 +143,7 @@ import EditArea from '../components/EditArea'
 import NewDoc from '../components/NewDoc'
 import Init from '../components/Init'
 import Setting from '../components/Setting'
-import 'element-tiptap/lib/index.css'
+import MoveDoc from '../components/MoveDoc'
 import { remote } from 'electron'
 import { findChildren } from '../utils/comm-func'
 import dirOpt from '../api/dirOpt'
@@ -162,6 +163,7 @@ export default {
       searchStr: '',
       content: '',
       currentDocId: null,
+      menuCurrentDocId: '',
       title: '',
       editable: false,
       visible: false,
@@ -171,7 +173,7 @@ export default {
       showDirectoryEdit: false,
       newDirectoryName: '',
       currentDirectoryId: 'root',
-      menucurrentDirectoryId: null,
+      menuCurrentDirectoryId: null,
       isAddChild: false,
       currentTagId: null,
       showTagEdit: false,
@@ -195,21 +197,22 @@ export default {
         }
       ],
       inputVisible: false,
-      inputValue: ''
+      inputValue: '',
+      moveDocShow: false
     }
   },
   components: {
     EditArea,
     NewDoc,
     Init,
-    Setting
+    Setting,
+    MoveDoc
   },
   mounted() {},
   methods: {
     initData() {
-      const that = this
       const dirList = dirOpt.listDir()
-      this.directorys.splice(0, that.directorys.length)
+      this.directorys.splice(0, this.directorys.length)
       this.directorys.push({
         label: '文件夹',
         id: 'root',
@@ -217,7 +220,7 @@ export default {
       })
 
       const tagList = tagOpt.listTag()
-      this.tags.splice(0, that.tags.length)
+      this.tags.splice(0, this.tags.length)
       this.tags.push({
         label: '标签',
         id: 0,
@@ -226,7 +229,7 @@ export default {
         })
       })
 
-      this.docs.splice(0, that.docs.length)
+      this.docs.splice(0, this.docs.length)
       docOpt.listDoc().list.forEach(row => {
         this.docs.push({
           id: row.id,
@@ -263,7 +266,8 @@ export default {
         new MenuItem({
           label: '新增子文件夹',
           click: function() {
-            that.menucurrentDirectoryId = nodeData.id
+            that.menuCurrentDirectoryId = nodeData.id
+            that.newDirectoryName = ''
             that.isAddChild = true
             that.showDirectoryEdit = true
           }
@@ -274,7 +278,7 @@ export default {
           new MenuItem({
             label: '修改文件夹',
             click: function() {
-              that.menucurrentDirectoryId = nodeData.id
+              that.menuCurrentDirectoryId = nodeData.id
               that.newDirectoryName = nodeData.label
               that.isAddChild = false
               that.showDirectoryEdit = true
@@ -361,6 +365,15 @@ export default {
       const that = this
       menu.append(
         new MenuItem({
+          label: '移动文档',
+          click: function() {
+            that.menuCurrentDocId = doc.id
+            that.moveDocShow = true
+          }
+        })
+      )
+      menu.append(
+        new MenuItem({
           label: '删除文档',
           click: function() {
             that
@@ -389,18 +402,18 @@ export default {
       if (this.isAddChild) {
         const lastId = dirOpt.insertDir(
           this.newDirectoryName,
-          this.menucurrentDirectoryId
+          this.menuCurrentDirectoryId
         )
         this.showDirectoryEdit = false
         this.$refs.directoryTree.append(
           { label: this.newDirectoryName, id: lastId },
-          this.menucurrentDirectoryId
+          this.menuCurrentDirectoryId
         )
       } else {
-        dirOpt.updateDir(this.newDirectoryName, this.menucurrentDirectoryId)
+        dirOpt.updateDir(this.newDirectoryName, this.menuCurrentDirectoryId)
         this.showDirectoryEdit = false
         this.$refs.directoryTree.getNode(
-          this.menucurrentDirectoryId
+          this.menuCurrentDirectoryId
         ).data.label = this.newDirectoryName
       }
     },

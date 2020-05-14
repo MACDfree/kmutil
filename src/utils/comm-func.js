@@ -7,7 +7,7 @@ export function findChildIds(list, pid, deleteIds) {
   })
 }
 
-export function findChildren(pid, list) {
+export function findChildren(pid, list, extFunc) {
   const nodes = []
   list.forEach(row => {
     if (row.pid === pid) {
