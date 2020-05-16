@@ -69,4 +69,10 @@ function deleteDoc(docIds) {
   }).write()
 }
 
-export default { insertDoc, listDoc, findDoc, updateDoc, listDocByTagId, deleteDoc }
+function moveDoc(docId, newDirectoryId) {
+  db().get('documents').find({ id: docId }).assign({
+    directoryId: newDirectoryId
+  }).write()
+}
+
+export default { insertDoc, listDoc, findDoc, updateDoc, listDocByTagId, deleteDoc, moveDoc }

@@ -11,11 +11,20 @@ export function findChildren(pid, list, extFunc) {
   const nodes = []
   list.forEach(row => {
     if (row.pid === pid) {
-      nodes.push({
-        label: row.name,
-        id: row.id,
-        children: findChildren(row.id, list)
-      })
+      if (extFunc && typeof extFunc === 'function') {
+        nodes.push({
+          label: row.name,
+          id: row.id,
+          children: findChildren(row.id, list, extFunc),
+          ...extFunc(row.id)
+        })
+      } else {
+        nodes.push({
+          label: row.name,
+          id: row.id,
+          children: findChildren(row.id, list)
+        })
+      }
     }
   })
   return nodes

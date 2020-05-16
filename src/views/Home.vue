@@ -131,7 +131,7 @@
     </el-dialog>
     <Init @init-finish="initData"></Init>
     <Setting></Setting>
-    <MoveDoc :show="moveDocShow" :doc-id="menuCurrentDocId"></MoveDoc>
+    <MoveDoc :show.sync="moveDocShow" :doc="menuCurrentDoc" @after-move="afterMove"></MoveDoc>
   </div>
 </template>
 
@@ -163,7 +163,7 @@ export default {
       searchStr: '',
       content: '',
       currentDocId: null,
-      menuCurrentDocId: '',
+      menuCurrentDoc: {},
       title: '',
       editable: false,
       visible: false,
@@ -236,6 +236,7 @@ export default {
           title: row.title,
           path: row.path,
           type: row.type,
+          directoryId: row.directoryId,
           createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
           updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
@@ -244,14 +245,14 @@ export default {
     treeNodeClick(nodeData) {
       this.currentDirectoryId = nodeData.id
       this.$refs.tagTree.setCurrentKey(null)
-      const directoryId = nodeData.id
       this.docs.splice(0, this.docs.length)
-      docOpt.listDoc(directoryId).list.forEach(row => {
+      docOpt.listDoc(this.currentDirectoryId).list.forEach(row => {
         this.docs.push({
           id: row.id,
           title: row.title,
           path: row.path,
           type: row.type,
+          directoryId: row.directoryId,
           createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
           updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
@@ -367,7 +368,7 @@ export default {
         new MenuItem({
           label: '移动文档',
           click: function() {
-            that.menuCurrentDocId = doc.id
+            that.menuCurrentDoc = { id: doc.id, directoryId: doc.directoryId }
             that.moveDocShow = true
           }
         })
@@ -398,6 +399,21 @@ export default {
       )
       menu.popup(remote.getCurrentWindow())
     },
+    afterMove() {
+      // 文档移动后需要刷新中间的文档列表
+      this.docs.splice(0, this.docs.length)
+      docOpt.listDoc(this.currentDirectoryId).list.forEach(row => {
+        this.docs.push({
+          id: row.id,
+          title: row.title,
+          path: row.path,
+          type: row.type,
+          directoryId: row.directoryId,
+          createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
+          updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
+        })
+      })
+    },
     submitDirectory() {
       if (this.isAddChild) {
         const lastId = dirOpt.insertDir(
@@ -427,6 +443,7 @@ export default {
           title: row.title,
           path: row.path,
           type: row.type,
+          directoryId: row.directoryId,
           createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
           updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
@@ -572,6 +589,7 @@ export default {
           title: row.title,
           path: row.path,
           type: row.type,
+          directoryId: row.directoryId,
           createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
           updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
         })
@@ -593,6 +611,7 @@ export default {
             title: row.title,
             path: row.path,
             type: row.type,
+            directoryId: row.directoryId,
             createTime: moment(row.createTime).format('YYYY-MM-DD HH:mm:ss'),
             updateTime: moment(row.updateTime).format('YYYY-MM-DD HH:mm:ss')
           })
