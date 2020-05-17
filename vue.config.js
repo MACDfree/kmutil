@@ -6,6 +6,12 @@ module.exports = {
       builderOptions: {
         // 设置打包之后的应用名称
         productName: 'kmutil',
+        publish: [
+          {
+            provider: 'generic',
+            url: 'http://127.0.0.1/exe'
+          }
+        ],
         win: {
           icon: 'public/icon/icon.ico',
           // 图标路径 windows系统中icon需要256*256的ico格式图片，更换应用图标亦在此处
@@ -17,6 +23,8 @@ module.exports = {
               'x64'
               // 'ia32'
             ]
+          }, {
+            target: 'zip'
           }]
         },
         dmg: {
