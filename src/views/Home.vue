@@ -79,7 +79,7 @@
         </ul>
       </div>
     </div>
-    <div class="main">
+    <div class="main" @keyup.ctrl.83="saveDoc">
       <div>
         <el-input v-model="title" placeholder="请输入标题" size="mini" :disabled="!editable"></el-input>
         <el-button size="mini" @click="saveDoc">{{ editable?'保存修改':'开始编辑' }}</el-button>
