@@ -64,6 +64,7 @@ function deleteDoc(docIds) {
       if (has && doc.path) {
         deleteFile(doc.path)
       }
+      return has
     }
     return false
   }).write()
