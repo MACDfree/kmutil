@@ -25,6 +25,19 @@ export function createMDFile() {
   return filePath.replace(currentPath + '\\attach\\', '')
 }
 
+export function createMMFile() {
+  const sharedObject = remote.getGlobal('sharedObject')
+  if (!sharedObject || !sharedObject.currentPath) {
+    throw new Error('currentPath is null')
+  }
+  const currentPath = sharedObject.currentPath
+  const dirPath = currentPath + '\\attach\\' + moment().format('YYYYMM') + '\\' + short.generate()
+  mkDir(dirPath)
+  const filePath = dirPath + '\\index.xmind'
+  fs.writeFileSync(filePath, fs.readFileSync('resources/index.xmind'))
+  return filePath.replace(currentPath + '\\attach\\', '')
+}
+
 export function copyFile(file) {
   const sharedObject = remote.getGlobal('sharedObject')
   if (!sharedObject || !sharedObject.currentPath) {

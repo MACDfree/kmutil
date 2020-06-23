@@ -31,7 +31,7 @@
         <div class="el-upload__tip" slot="tip">只能上传{{ allowType }}文件，且不超过500kb</div>
       </el-upload>
       <span slot="footer" class="dialog-footer">
-        <el-button @click="showUploader = false">取 消</el-button>
+        <el-button @click="cancelConfirm">取 消</el-button>
         <el-button type="primary" @click="submitUpload">确 定</el-button>
       </span>
     </el-dialog>
@@ -39,7 +39,7 @@
 </template>
 
 <script>
-import { copyFile, createMDFile } from '../utils/file-util'
+import { copyFile, createMDFile, createMMFile } from '../utils/file-util'
 import docOpt from '../api/docOpt'
 export default {
   props: {
@@ -113,6 +113,30 @@ export default {
     },
     submitUpload() {
       this.$refs.uploader.submit()
+    },
+    cancelConfirm() {
+      this.$confirm(
+        '创建空白记录还是取消?',
+        '提示',
+        {
+          confirmButtonText: '创建',
+          cancelButtonText: '取消',
+          type: 'info'
+        }
+      ).then(() => {
+        const path = createMMFile()
+        docOpt.insertDoc({
+          type: this.newDocType,
+          directoryId: this.directoryId,
+          path: path
+        })
+        const obj = docOpt.listDoc(this.directoryId)
+        this.$emit('refresh-doc', obj.list)
+        this.newDocVisible = false
+        this.showUploader = false
+      }).finally(() => {
+        this.showUploader = false
+      })
     }
   },
   computed: {
