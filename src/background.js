@@ -128,6 +128,12 @@ function createMenu() {
           click: setting
         },
         {
+          label: '刷新',
+          click: function() {
+            win.reload()
+          }
+        },
+        {
           label: '检查更新',
           click: updateHandle
         },
